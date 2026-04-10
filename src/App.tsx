@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { ElementType } from 'react'
+import { supabase } from './supabaseClient'
 import {
   Home, Compass, User, Heart, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
@@ -42,6 +43,38 @@ interface MockUser {
   avatar: string
   votesCount: number
   proposalsCount: number
+}
+
+// ── Supabase row shape ─────────────────────────────────────────
+interface ProposalRow {
+  id: string
+  title: string
+  description: string
+  category: string
+  status: string
+  supports: number
+  votes_pour: number
+  votes_contre: number
+  votes_blanc: number
+  tags: string[] | null
+  created_at: string
+}
+
+function mapRowToProposal(row: ProposalRow): Proposal {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    stage: (row.status as Stage) ?? 'seedling',
+    votes: { pour: row.votes_pour ?? 0, contre: row.votes_contre ?? 0, blanc: row.votes_blanc ?? 0 },
+    signatures: row.supports ?? 0,
+    targetSignatures: 10000,
+    arguments: [],
+    author: 'Proposé par la communauté',
+    date: row.created_at?.slice(0, 10) ?? '',
+    tags: row.tags ?? [],
+  }
 }
 
 // ── Mock data ──────────────────────────────────────────────────
@@ -575,17 +608,42 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
 
 // ── Home Page ──────────────────────────────────────────────────
 function HomePage() {
-  const [proposals, setProposals]       = useState<Proposal[]>(PROPOSALS)
-  const [activeStage, setActiveStage]   = useState<Stage | 'all'>('all')
-  const [agoraProposal, setAgoraProposal] = useState<Proposal | null>(null)
+  const [proposals, setProposals]           = useState<Proposal[]>(PROPOSALS)
+  const [loading, setLoading]               = useState(true)
+  const [activeStage, setActiveStage]       = useState<Stage | 'all'>('all')
+  const [agoraProposal, setAgoraProposal]   = useState<Proposal | null>(null)
   const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
-  const [votedIds, setVotedIds]         = useState<Set<string>>(new Set())
+  const [votedIds, setVotedIds]             = useState<Set<string>>(new Set())
+
+  // Fetch from Supabase, fall back to mock data on error
+  useEffect(() => {
+    let cancelled = false
+    async function fetchProposals() {
+      try {
+        const { data, error } = await supabase
+          .from('proposals')
+          .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at')
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        if (!cancelled && data && data.length > 0) {
+          setProposals((data as ProposalRow[]).map(mapRowToProposal))
+        }
+      } catch {
+        // Supabase unreachable — keep the mock fallback already in state
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchProposals()
+    return () => { cancelled = true }
+  }, [])
 
   const filtered = activeStage === 'all'
     ? proposals
     : proposals.filter(p => p.stage === activeStage)
 
-  const handleVoted = useCallback((proposalId: string, choice: VoteChoice) => {
+  const handleVoted = useCallback((proposalId: string, choice: VoteChoice, proofHash: string) => {
+    // Optimistic local update first
     setVotedIds(prev => new Set([...prev, proposalId]))
     setProposals(prev =>
       prev.map(p =>
@@ -596,6 +654,26 @@ function HomePage() {
     )
     setVotingProposal(null)
     setAgoraProposal(null)
+
+    // Persist to Supabase (fire-and-forget — UI already updated)
+    const colMap: Record<VoteChoice, 'votes_pour' | 'votes_contre' | 'votes_blanc'> = {
+      pour: 'votes_pour', contre: 'votes_contre', blanc: 'votes_blanc',
+    }
+    const userHash = MOCK_USER.name + '-hash'
+    Promise.all([
+      supabase.from('votes').insert({
+        proposal_id: proposalId,
+        user_hash: userHash,
+        vote_choice: choice,
+        proof_hash: proofHash,
+      }),
+      supabase.from('proposals').select(colMap[choice]).eq('id', proposalId).single()
+        .then(({ data }) => {
+          if (!data) return
+          const current = (data as Record<string, number>)[colMap[choice]] ?? 0
+          return supabase.from('proposals').update({ [colMap[choice]]: current + 1 }).eq('id', proposalId)
+        }),
+    ]).catch(() => { /* silently ignore — local state is source of truth */ })
   }, [])
 
   const filters: { value: Stage | 'all'; label: string }[] = [
@@ -649,15 +727,32 @@ function HomePage() {
         </div>
 
         {/* List */}
-        <div className="space-y-4">
-          {filtered.map(proposal => (
-            <ProposalCard
-              key={proposal.id}
-              proposal={proposal}
-              onOpen={() => setAgoraProposal(proposal)}
-            />
-          ))}
-        </div>
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 space-y-3 animate-pulse">
+                <div className="flex gap-2">
+                  <div className="h-5 w-20 bg-slate-100 rounded-full" />
+                  <div className="h-5 w-16 bg-slate-100 rounded-full ml-auto" />
+                </div>
+                <div className="h-4 bg-slate-100 rounded-lg w-3/4" />
+                <div className="h-3 bg-slate-100 rounded-lg w-full" />
+                <div className="h-3 bg-slate-100 rounded-lg w-2/3" />
+                <div className="h-9 bg-slate-100 rounded-xl mt-2" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filtered.map(proposal => (
+              <ProposalCard
+                key={proposal.id}
+                proposal={proposal}
+                onOpen={() => setAgoraProposal(proposal)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {agoraProposal && !votingProposal && (
@@ -671,7 +766,7 @@ function HomePage() {
       {votingProposal && (
         <VotingBooth
           proposal={votingProposal}
-          onVoted={(choice, hash) => handleVoted(votingProposal.id, choice)}
+          onVoted={(choice, hash) => handleVoted(votingProposal.id, choice, hash)}
           onClose={() => setVotingProposal(null)}
         />
       )}
