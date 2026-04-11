@@ -1653,6 +1653,8 @@ function ProfilePage({ onLogout, onNavigateElu }: { onLogout: () => void; onNavi
 
   async function handleJoinCommune(orgId: string) {
     setJoinedCommuneIds(prev => { const s = new Set(prev); s.add(orgId); return s })
+    const org = communeResults.find(o => o.id === orgId)
+    if (org) setJoinedCommunes(prev => [...prev, org])
     try {
       const { error } = await supabase.from('citizen_organisations').insert({
         user_hash: userHash,
@@ -1798,6 +1800,29 @@ function ProfilePage({ onLogout, onNavigateElu }: { onLogout: () => void; onNavi
           <p className="text-sm text-slate-400 text-center py-2">Recherchez et rejoignez votre commune</p>
         )}
       </div>
+
+      {/* Accès tableau de bord élu */}
+      {joinedCommunes.length > 0 && (
+        <div className="mb-4">
+          {joinedCommunes.map(commune => (
+            <button
+              key={commune.id}
+              onClick={() => onNavigateElu(commune)}
+              className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-white active:scale-95 transition-all shadow-sm"
+              style={{ backgroundColor: '#0c447c' }}
+            >
+              <div className="flex items-center gap-3">
+                <Landmark size={16} className="text-blue-200 flex-shrink-0" />
+                <div className="text-left">
+                  <p className="text-sm font-semibold leading-tight">Tableau de bord élu</p>
+                  <p className="text-blue-200 text-xs mt-0.5">{commune.name}</p>
+                </div>
+              </div>
+              <ChevronRight size={16} className="text-blue-200 flex-shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Mes votes */}
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
@@ -2632,10 +2657,16 @@ export default function App() {
   const [activePage, setActivePage]         = useState<NavPage>('home')
   const [showPropose, setShowPropose]       = useState(false)
   const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
+  const [selectedCommune, setSelectedCommune] = useState<Organisation | null>(null)
 
   const handleSelectCategory = (cat: string) => {
     setPendingCategory(cat)
     setActivePage('home')
+  }
+
+  const handleNavigateElu = (commune: Organisation) => {
+    setSelectedCommune(commune)
+    setActivePage('elu')
   }
 
   const navItems: { page: NavPage; label: string; icon: ElementType }[] = [
@@ -2649,13 +2680,30 @@ export default function App() {
     return <LoginScreen onLogin={() => setIsLoggedIn(true)} />
   }
 
+  // Elected dashboard renders full-screen, no nav
+  if (activePage === 'elu' && selectedCommune) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
+        <ElectedDashboard
+          commune={selectedCommune}
+          onBack={() => setActivePage('profile')}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto relative">
       {/* Scrollable content area */}
       <main className="flex-1 overflow-y-auto pb-24">
         {activePage === 'home'    && <HomePage initialCategory={pendingCategory} />}
         {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} />}
-        {activePage === 'profile' && <ProfilePage onLogout={() => { setIsLoggedIn(false); setActivePage('home') }} />}
+        {activePage === 'profile' && (
+          <ProfilePage
+            onLogout={() => { setIsLoggedIn(false); setActivePage('home') }}
+            onNavigateElu={handleNavigateElu}
+          />
+        )}
         {activePage === 'support' && <SupportPage />}
       </main>
 
