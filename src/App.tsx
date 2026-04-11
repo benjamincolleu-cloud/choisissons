@@ -719,6 +719,7 @@ interface ParliamentaryLaw {
   parliamentVoteDate: string
   votes: { pour: number; contre: number; blanc: number }
   tags: string[]
+  officialUrl: string
 }
 
 const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
@@ -732,6 +733,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     parliamentVoteDate: '22 avril 2026',
     votes: { pour: 8342, contre: 12104, blanc: 1203 },
     tags: ['budget', 'fiscalité', 'économie'],
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/textes/l16b0324_projet-loi',
   },
   {
     id: 'law-2',
@@ -743,6 +745,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     parliamentVoteDate: '8 mai 2026',
     votes: { pour: 5621, contre: 2890, blanc: 744 },
     tags: ['IA', 'numérique', 'souveraineté'],
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/textes/l16b0187_projet-loi',
   },
   {
     id: 'law-3',
@@ -754,6 +757,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     parliamentVoteDate: '17 juin 2026',
     votes: { pour: 0, contre: 0, blanc: 0 },
     tags: ['retraites', 'social', 'travail'],
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/textes/l16b0256_projet-loi',
   },
 ]
 
@@ -793,16 +797,22 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
         <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mb-3">{law.description}</p>
 
         {/* Vote date + texte officiel */}
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <BookOpen size={12} className="text-slate-400" />
             <span>Vote Parlement : <strong className="text-slate-700">{law.parliamentVoteDate}</strong></span>
           </div>
-          <button className="ml-auto flex items-center gap-1 text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2 py-0.5 hover:bg-blue-50 transition-colors active:scale-95">
+          <a
+            href={law.officialUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto flex items-center gap-1 text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2 py-0.5 hover:bg-blue-50 transition-colors active:scale-95"
+          >
             <ArrowLeft size={10} className="rotate-[135deg]" />
             Texte officiel
-          </button>
+          </a>
         </div>
+        <p className="text-xs text-slate-400 mb-3">Source : Assemblée Nationale officielle</p>
 
         {/* Vote bar */}
         {total > 0 && <VoteBar votes={law.votes} />}
