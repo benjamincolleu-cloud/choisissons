@@ -229,8 +229,75 @@ function VoteBar({ votes }: { votes: { pour: number; contre: number; blanc: numb
 }
 
 // ── Login Screen ───────────────────────────────────────────────
+const WORKFLOW_STEPS = [
+  {
+    label: 'Pépinière',
+    description: 'Proposez une idée. Elle devient publique après 10 soutiens citoyens.',
+  },
+  {
+    label: 'Jury',
+    description: '100 citoyens tirés au sort vérifient la neutralité et la légalité du texte.',
+  },
+  {
+    label: 'Isoloir',
+    description: 'Votez Pour, Contre ou Blanc. Votre vote est anonyme et chiffré SHA-256.',
+  },
+  {
+    label: 'Décision',
+    description: 'Si le quorum est atteint, la proposition devient une décision citoyenne officielle.',
+  },
+]
+
+function AboutModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+        <div className="bg-indigo-600 p-5 text-white text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-500 mb-3">
+            <Vote size={24} className="text-white" />
+          </div>
+          <h2 className="text-xl font-black tracking-tight">CHOISISSONS</h2>
+          <p className="text-indigo-200 text-xs mt-1">La démocratie directe citoyenne</p>
+        </div>
+        <div className="p-5">
+          <p className="text-slate-600 text-sm leading-relaxed mb-5">
+            CHOISISSONS est une plateforme indépendante qui permet à chaque citoyen de proposer,
+            débattre et voter des décisions publiques. Sans partis, sans publicité, sans algorithme
+            de manipulation — juste la voix du peuple.
+          </p>
+          <div className="space-y-3 mb-6">
+            {[
+              { icon: BookOpen, label: 'Transparence',   desc: 'Toutes les décisions et les votes agrégés sont publics.' },
+              { icon: Lock,     label: 'Anonymat',       desc: 'Votre vote individuel est chiffré et ne peut être tracé.' },
+              { icon: Shield,   label: 'Souveraineté',   desc: 'Aucun acteur privé ni politique ne contrôle la plateforme.' },
+            ].map(({ icon: Icon, label, desc }) => (
+              <div key={label} className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Icon size={14} className="text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-800">{label}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full bg-indigo-600 text-white rounded-xl py-3 font-semibold text-sm active:scale-95 transition-all"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]         = useState(false)
+  const [activeStep, setActiveStep]   = useState<number | null>(null)
+  const [showAbout, setShowAbout]     = useState(false)
 
   const handleLogin = () => {
     setLoading(true)
@@ -281,28 +348,55 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           )}
         </button>
 
-        <p className="text-center text-indigo-400 text-xs mt-4">
-          Service simulé — aucune donnée réelle transmise
+        <p className="text-center text-indigo-400 text-xs mt-3">
+          Prototype en cours de développement — FranceConnect réel en Phase 2
         </p>
+
+        <button
+          onClick={() => setShowAbout(true)}
+          className="w-full text-center text-indigo-300 text-xs mt-2 underline underline-offset-2 hover:text-indigo-100 transition-colors"
+        >
+          En savoir plus sur CHOISISSONS
+        </button>
 
         {/* Workflow steps */}
         <div className="mt-8 bg-white/5 rounded-2xl p-4">
           <p className="text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-3">Comment ça marche</p>
-          <div className="flex items-center justify-between text-xs text-indigo-200">
-            {['Pépinière', 'Jury', 'Isoloir', 'Décision'].map((step, i) => (
-              <div key={step} className="flex items-center">
-                <div className="text-center">
-                  <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold mx-auto mb-1">
+          <div className="flex items-center justify-between text-xs text-indigo-200 mb-2">
+            {WORKFLOW_STEPS.map((step, i) => (
+              <div key={step.label} className="flex items-center">
+                <button
+                  onClick={() => setActiveStep(activeStep === i ? null : i)}
+                  className="text-center group"
+                >
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto mb-1 transition-colors ${
+                    activeStep === i ? 'bg-white text-indigo-700' : 'bg-indigo-600 text-white group-hover:bg-indigo-400'
+                  }`}>
                     {i + 1}
                   </div>
-                  <span>{step}</span>
-                </div>
+                  <span className={activeStep === i ? 'text-white font-semibold' : ''}>{step.label}</span>
+                </button>
                 {i < 3 && <ChevronRight size={12} className="text-indigo-500 mx-1" />}
               </div>
             ))}
           </div>
+          {activeStep !== null && (
+            <div className="mt-3 bg-indigo-900/60 rounded-xl px-3 py-2.5 border border-indigo-700/50">
+              <p className="text-indigo-100 text-xs leading-relaxed">
+                <span className="font-semibold text-white">{WORKFLOW_STEPS[activeStep].label} — </span>
+                {WORKFLOW_STEPS[activeStep].description}
+              </p>
+            </div>
+          )}
         </div>
+
+        {/* Footer */}
+        <p className="text-center text-indigo-600 text-xs mt-8">
+          © 2026 CHOISISSONS — Mentions légales · Confidentialité
+        </p>
       </div>
+
+      {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
     </div>
   )
 }
