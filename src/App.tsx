@@ -7,6 +7,7 @@ import {
   Sprout, Users, Vote, Shield, BookOpen, HelpCircle,
   ChevronDown, ChevronUp, Lock, Star, Newspaper,
   Building2, ArrowLeft, Info, Landmark,
+  Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText, Scale,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -1321,8 +1322,12 @@ function ExplorePage({ onSelectCategory }: { onSelectCategory: (cat: string) => 
 }
 
 // ── Profile Page ───────────────────────────────────────────────
-function ProfilePage() {
-  const [openFaq, setOpenFaq] = useState<number | null>(null)
+function ProfilePage({ onLogout }: { onLogout: () => void }) {
+  const [openFaq, setOpenFaq]           = useState<number | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showLegal, setShowLegal]       = useState<string | null>(null)
+  const [notifEnabled, setNotifEnabled] = useState(true)
+  const [language, setLanguage]         = useState('FR')
 
   const faqs = [
     {
@@ -1348,28 +1353,83 @@ function ProfilePage() {
   ]
 
   const roadmap = [
-    { phase: 'Phase 1', items: ['Login FranceConnect', 'Propositions simulées', 'Vote SHA-256'], done: true },
-    { phase: 'Phase 2', items: ['Supabase backend', 'Vrai jury citoyen', 'Notifications push'], done: false },
-    { phase: 'Phase 3', items: ['API gouvernementale', 'Mobile natif', 'Audit de sécurité'], done: false },
+    {
+      phase: 'Phase 1',
+      items: ['Login FranceConnect', 'Supabase connecté', 'Vote SHA-256', 'Déploiement Vercel'],
+      done: true,
+    },
+    {
+      phase: 'Phase 2',
+      items: ['FranceConnect réel', 'Jury citoyen', 'Stripe paiements', 'API Assemblée Nationale'],
+      done: false,
+    },
+    {
+      phase: 'Phase 3',
+      items: ['Application mobile', 'Audit sécurité ANSSI', 'Zero-knowledge proof'],
+      done: false,
+    },
   ]
+
+  const legalDocs: Record<string, { title: string; content: React.ReactNode }> = {
+    cgu: {
+      title: "Conditions Générales d'Utilisation",
+      content: (
+        <p className="text-sm text-slate-600 leading-relaxed">
+          CHOISISSONS est une plateforme de démocratie directe citoyenne. En utilisant ce service,
+          vous acceptez de voter de manière sincère et personnelle. Les votes sont anonymes et
+          chiffrés. Version prototype — usage non contraignant.
+        </p>
+      ),
+    },
+    privacy: {
+      title: 'Politique de confidentialité',
+      content: (
+        <p className="text-sm text-slate-600 leading-relaxed">
+          Nous ne collectons aucune donnée personnelle identifiable. Votre identité est dissociée
+          de votre vote par chiffrement SHA-256 avant tout enregistrement. Conformément au RGPD,
+          vous pouvez demander la suppression de vos données à{' '}
+          <span className="text-indigo-600 font-medium">contact@choisissons.fr</span>
+        </p>
+      ),
+    },
+    legal: {
+      title: 'Mentions légales',
+      content: (
+        <div className="space-y-2 text-sm text-slate-600">
+          <p><span className="font-semibold text-slate-700">Éditeur :</span> Association CHOISISSONS (en cours de création)</p>
+          <p><span className="font-semibold text-slate-700">Hébergement :</span> Vercel Inc. / Supabase (West EU Paris)</p>
+          <p><span className="font-semibold text-slate-700">Directeur de publication :</span> Benjamin Colleu</p>
+        </div>
+      ),
+    },
+  }
 
   return (
     <div className="p-4">
       {/* User card */}
       <div className="bg-indigo-600 rounded-2xl p-5 mb-5 text-white">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-500 flex items-center justify-center text-xl font-black shadow-lg">
-            {MOCK_USER.avatar}
-          </div>
-          <div>
-            <h2 className="font-black text-lg">{MOCK_USER.name}</h2>
-            <p className="text-indigo-200 text-sm">{MOCK_USER.commune}</p>
-            <div className="flex gap-3 mt-1 text-xs text-indigo-200">
-              <span>{MOCK_USER.votesCount} votes</span>
-              <span>·</span>
-              <span>{MOCK_USER.proposalsCount} propositions</span>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500 flex items-center justify-center text-xl font-black shadow-lg flex-shrink-0">
+              {MOCK_USER.avatar}
+            </div>
+            <div>
+              <h2 className="font-black text-lg">{MOCK_USER.name}</h2>
+              <p className="text-indigo-200 text-sm">{MOCK_USER.commune}</p>
+              <div className="flex gap-3 mt-1 text-xs text-indigo-200">
+                <span>{MOCK_USER.votesCount} votes</span>
+                <span>·</span>
+                <span>{MOCK_USER.proposalsCount} propositions</span>
+              </div>
             </div>
           </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="w-9 h-9 rounded-xl bg-indigo-500/60 flex items-center justify-center hover:bg-indigo-500 transition-colors flex-shrink-0"
+            aria-label="Réglages"
+          >
+            <Settings size={17} className="text-white" />
+          </button>
         </div>
       </div>
 
@@ -1381,11 +1441,11 @@ function ProfilePage() {
         </div>
         <div className="space-y-2 text-sm">
           {[
-            { label: 'Code source',       value: 'Open source (GitHub)',        ok: true },
-            { label: 'Hébergement',       value: 'France (OVH)',                ok: true },
-            { label: 'Chiffrement votes', value: 'SHA-256 + Zero-knowledge',    ok: true },
-            { label: 'Audit indépendant', value: 'Prévu Q3 2026',              ok: false },
-            { label: 'Certifié ANSSI',    value: 'En cours',                   ok: false },
+            { label: 'Code source',       value: 'Open source (GitHub)',     ok: true },
+            { label: 'Hébergement',       value: 'Vercel / Supabase EU',     ok: true },
+            { label: 'Chiffrement votes', value: 'SHA-256 + Zero-knowledge', ok: true },
+            { label: 'Audit indépendant', value: 'Prévu Q3 2026',           ok: false },
+            { label: 'Certifié ANSSI',    value: 'En cours',                ok: false },
           ].map(item => (
             <div key={item.label} className="flex justify-between items-center py-1.5 border-b border-slate-50 last:border-0">
               <span className="text-slate-500">{item.label}</span>
@@ -1426,8 +1486,47 @@ function ProfilePage() {
         </div>
       </div>
 
+      {/* Legal */}
+      <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Scale size={16} className="text-indigo-600" />
+          <h3 className="font-bold text-slate-800">Informations légales</h3>
+        </div>
+        <div className="space-y-2">
+          {[
+            { key: 'cgu',     label: "Conditions Générales d'Utilisation", icon: FileText },
+            { key: 'privacy', label: 'Politique de confidentialité',       icon: Shield },
+            { key: 'legal',   label: 'Mentions légales',                   icon: Landmark },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setShowLegal(key)}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors active:scale-95"
+            >
+              <div className="flex items-center gap-2.5">
+                <Icon size={15} className="text-slate-500" />
+                <span className="text-sm text-slate-700 font-medium">{label}</span>
+              </div>
+              <ChevronRight size={15} className="text-slate-400" />
+            </button>
+          ))}
+          <a
+            href="https://github.com/benjamincolleu-cloud/choisissons"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors active:scale-95"
+          >
+            <div className="flex items-center gap-2.5">
+              <ExternalLink size={15} className="text-slate-500" />
+              <span className="text-sm text-slate-700 font-medium">Open Source</span>
+            </div>
+            <span className="text-xs text-indigo-500 font-medium">GitHub ↗</span>
+          </a>
+        </div>
+      </div>
+
       {/* FAQ */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-4">
+      <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
           <HelpCircle size={16} className="text-indigo-600" />
           <h3 className="font-bold text-slate-800">FAQ</h3>
@@ -1453,6 +1552,134 @@ function ProfilePage() {
           ))}
         </div>
       </div>
+
+      {/* Logout */}
+      <button
+        onClick={onLogout}
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-red-200 text-red-500 font-semibold bg-red-50 hover:bg-red-100 active:scale-95 transition-all mb-4"
+      >
+        <LogOut size={17} />
+        Se déconnecter
+      </button>
+
+      {/* Version */}
+      <p className="text-center text-xs text-slate-400 pb-2">
+        CHOISISSONS v1.0 — Prototype Alpha
+      </p>
+
+      {/* ── Settings modal ──────────────────────────────────────── */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end p-4">
+          <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Settings size={17} className="text-indigo-600" />
+                <h3 className="font-black text-slate-800">Réglages</h3>
+              </div>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
+              >
+                <X size={16} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Notifications toggle */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                    <Bell size={16} className="text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-800 text-sm">Notifications</p>
+                    <p className="text-xs text-slate-400">Alertes votes et propositions</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setNotifEnabled(v => !v)}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${notifEnabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                  role="switch"
+                  aria-checked={notifEnabled}
+                >
+                  <span
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${notifEnabled ? 'translate-x-6' : 'translate-x-0.5'}`}
+                  />
+                </button>
+              </div>
+
+              {/* Language */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                    <Globe size={16} className="text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-800 text-sm">Langue</p>
+                    <p className="text-xs text-slate-400">Interface de l'application</p>
+                  </div>
+                </div>
+                <select
+                  value={language}
+                  onChange={e => setLanguage(e.target.value)}
+                  className="text-sm font-semibold text-slate-700 bg-slate-100 rounded-lg px-3 py-1.5 outline-none cursor-pointer"
+                >
+                  <option value="FR">🇫🇷 FR</option>
+                  <option value="EN">🇬🇧 EN</option>
+                </select>
+              </div>
+
+              {/* Delete account */}
+              <div className="pt-2 border-t border-slate-100">
+                <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 active:scale-95 transition-all">
+                  <Trash2 size={16} />
+                  <span className="font-semibold text-sm">Supprimer mon compte</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm active:scale-95 transition-all"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Legal modal ─────────────────────────────────────────── */}
+      {showLegal && legalDocs[showLegal] && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end p-4">
+          <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-black text-slate-800 text-sm leading-tight pr-4">
+                {legalDocs[showLegal].title}
+              </h3>
+              <button
+                onClick={() => setShowLegal(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"
+              >
+                <X size={16} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="p-5">
+              {legalDocs[showLegal].content}
+            </div>
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setShowLegal(null)}
+                className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm active:scale-95 transition-all"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1794,7 +2021,7 @@ export default function App() {
       <main className="flex-1 overflow-y-auto pb-24">
         {activePage === 'home'    && <HomePage initialCategory={pendingCategory} />}
         {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} />}
-        {activePage === 'profile' && <ProfilePage />}
+        {activePage === 'profile' && <ProfilePage onLogout={() => { setIsLoggedIn(false); setActivePage('home') }} />}
         {activePage === 'support' && <SupportPage />}
       </main>
 
