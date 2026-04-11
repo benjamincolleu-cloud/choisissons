@@ -708,14 +708,145 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
   )
 }
 
+// ── Parliamentary Laws data ────────────────────────────────────
+interface ParliamentaryLaw {
+  id: string
+  number: string
+  title: string
+  description: string
+  category: string
+  stage: Stage
+  parliamentVoteDate: string
+  votes: { pour: number; contre: number; blanc: number }
+  tags: string[]
+}
+
+const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
+  {
+    id: 'law-1',
+    number: 'n°324',
+    title: 'PLF 2026 — Projet de Loi de Finances',
+    description: "Définit le budget de l'État pour 2026 : dépenses publiques, recettes fiscales et réforme de la TVA sur les produits de première nécessité. Enveloppe totale : 492 milliards d'euros.",
+    category: 'Économie',
+    stage: 'voting',
+    parliamentVoteDate: '22 avril 2026',
+    votes: { pour: 8342, contre: 12104, blanc: 1203 },
+    tags: ['budget', 'fiscalité', 'économie'],
+  },
+  {
+    id: 'law-2',
+    number: 'n°187',
+    title: "Loi sur l'IA et la souveraineté numérique",
+    description: "Encadre l'intelligence artificielle dans les services publics et les entreprises. Crée une autorité nationale de régulation des algorithmes et impose la transparence des modèles d'IA utilisés par l'État.",
+    category: 'Numérique',
+    stage: 'voting',
+    parliamentVoteDate: '8 mai 2026',
+    votes: { pour: 5621, contre: 2890, blanc: 744 },
+    tags: ['IA', 'numérique', 'souveraineté'],
+  },
+  {
+    id: 'law-3',
+    number: 'n°256',
+    title: 'Réforme des retraites complémentaires',
+    description: "Modernise le système AGIRC-ARRCO. Révise les règles de cotisation et d'acquisition de points pour les salariés du secteur privé, avec un ajustement de l'âge de liquidation à taux plein.",
+    category: 'Social',
+    stage: 'review',
+    parliamentVoteDate: '17 juin 2026',
+    votes: { pour: 0, contre: 0, blanc: 0 },
+    tags: ['retraites', 'social', 'travail'],
+  },
+]
+
+function lawToProposal(law: ParliamentaryLaw): Proposal {
+  return {
+    id: law.id,
+    title: law.title,
+    description: law.description,
+    category: law.category,
+    stage: law.stage,
+    votes: law.votes,
+    signatures: 0,
+    targetSignatures: 10000,
+    arguments: [],
+    author: 'Assemblée Nationale',
+    date: law.parliamentVoteDate,
+    tags: law.tags,
+  }
+}
+
+// ── Law Card ───────────────────────────────────────────────────
+function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void }) {
+  const total = law.votes.pour + law.votes.contre + law.votes.blanc
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="p-4">
+        {/* Badges row */}
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5">
+            Assemblée Nationale
+          </span>
+          <span className="text-xs font-semibold text-slate-400">{law.number}</span>
+          <span className="ml-auto text-xs text-slate-400">{law.category}</span>
+        </div>
+
+        <h3 className="font-bold text-slate-800 text-base leading-snug mb-1">{law.title}</h3>
+        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mb-3">{law.description}</p>
+
+        {/* Vote date + texte officiel */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <BookOpen size={12} className="text-slate-400" />
+            <span>Vote Parlement : <strong className="text-slate-700">{law.parliamentVoteDate}</strong></span>
+          </div>
+          <button className="ml-auto flex items-center gap-1 text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2 py-0.5 hover:bg-blue-50 transition-colors active:scale-95">
+            <ArrowLeft size={10} className="rotate-[135deg]" />
+            Texte officiel
+          </button>
+        </div>
+
+        {/* Vote bar */}
+        {total > 0 && <VoteBar votes={law.votes} />}
+        {total > 0 && (
+          <p className="text-xs text-slate-400 mt-1">{total.toLocaleString('fr-FR')} avis citoyens</p>
+        )}
+      </div>
+
+      <div className="px-4 pb-4">
+        <button
+          onClick={onOpen}
+          className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${
+            law.stage === 'voting'
+              ? 'bg-[#002395] text-white shadow-md shadow-blue-200'
+              : 'bg-slate-100 text-slate-700'
+          }`}
+        >
+          {law.stage === 'voting' ? <Vote size={15} /> : <Info size={15} />}
+          {law.stage === 'voting' ? "Lire & Voter" : "Lire le texte"}
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Home Page ──────────────────────────────────────────────────
 function HomePage() {
+  // ── Tab state ──────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'lois' | 'propositions'>('lois')
+
+  // ── Propositions citoyennes state ──────────────────────────────
   const [proposals, setProposals]           = useState<Proposal[]>(PROPOSALS)
   const [loading, setLoading]               = useState(true)
   const [activeStage, setActiveStage]       = useState<Stage | 'all'>('all')
   const [agoraProposal, setAgoraProposal]   = useState<Proposal | null>(null)
   const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
   const [votedIds, setVotedIds]             = useState<Set<string>>(new Set())
+
+  // ── Lois en cours state ────────────────────────────────────────
+  const [laws, setLaws]             = useState<ParliamentaryLaw[]>(PARLIAMENTARY_LAWS_INITIAL)
+  const [lawVotedIds, setLawVotedIds] = useState<Set<string>>(new Set())
+  const [agoraLaw, setAgoraLaw]     = useState<Proposal | null>(null)
+  const [votingLaw, setVotingLaw]   = useState<Proposal | null>(null)
 
   // Fetch from Supabase, fall back to mock data on error
   useEffect(() => {
@@ -745,7 +876,6 @@ function HomePage() {
     : proposals.filter(p => p.stage === activeStage)
 
   const handleVoted = useCallback((proposalId: string, choice: VoteChoice, proofHash: string) => {
-    // Optimistic local update first
     setVotedIds(prev => new Set([...prev, proposalId]))
     setProposals(prev =>
       prev.map(p =>
@@ -757,7 +887,6 @@ function HomePage() {
     setVotingProposal(null)
     setAgoraProposal(null)
 
-    // Persist to Supabase (fire-and-forget — UI already updated)
     const colMap: Record<VoteChoice, 'votes_pour' | 'votes_contre' | 'votes_blanc'> = {
       pour: 'votes_pour', contre: 'votes_contre', blanc: 'votes_blanc',
     }
@@ -778,6 +907,19 @@ function HomePage() {
     ]).catch(() => { /* silently ignore — local state is source of truth */ })
   }, [])
 
+  const handleLawVoted = useCallback((lawId: string, choice: VoteChoice) => {
+    setLawVotedIds(prev => new Set([...prev, lawId]))
+    setLaws(prev =>
+      prev.map(l =>
+        l.id !== lawId
+          ? l
+          : { ...l, votes: { ...l.votes, [choice]: l.votes[choice] + 1 } }
+      )
+    )
+    setVotingLaw(null)
+    setAgoraLaw(null)
+  }, [])
+
   const filters: { value: Stage | 'all'; label: string }[] = [
     { value: 'all',      label: 'Toutes' },
     { value: 'seedling', label: 'Pépinière' },
@@ -790,73 +932,129 @@ function HomePage() {
     <>
       <div className="p-4">
         {/* Header */}
-        <div className="mb-5">
-          <h1 className="text-2xl font-black text-slate-800">Propositions</h1>
+        <div className="mb-4">
+          <h1 className="text-2xl font-black text-slate-800">Démocratie</h1>
           <p className="text-slate-500 text-sm">Citoyenne, citoyen — votre voix compte.</p>
         </div>
 
-        {/* Stats banner */}
-        <div className="bg-indigo-600 rounded-2xl p-4 mb-5 text-white">
-          <div className="flex justify-around">
-            {[
-              { value: proposals.length,                              label: 'propositions' },
-              { value: proposals.filter(p => p.stage === 'voting').length,  label: 'en vote' },
-              { value: proposals.filter(p => p.stage === 'adopted').length, label: 'adoptées' },
-            ].map(({ value, label }) => (
-              <div key={label} className="text-center">
-                <div className="text-2xl font-black">{value}</div>
-                <div className="text-indigo-200 text-xs">{label}</div>
-              </div>
-            ))}
-          </div>
+        {/* Main tabs */}
+        <div className="flex gap-2 mb-5">
+          <button
+            onClick={() => setActiveTab('lois')}
+            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${
+              activeTab === 'lois'
+                ? 'bg-[#002395] text-white shadow-lg shadow-blue-200'
+                : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            🏛 Lois en cours
+          </button>
+          <button
+            onClick={() => setActiveTab('propositions')}
+            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${
+              activeTab === 'propositions'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            ✊ Propositions citoyennes
+          </button>
         </div>
 
-        {/* Stage filters */}
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-4" style={{ scrollbarWidth: 'none' }}>
-          {filters.map(f => (
-            <button
-              key={f.value}
-              onClick={() => setActiveStage(f.value)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                activeStage === f.value
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* List */}
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 space-y-3 animate-pulse">
-                <div className="flex gap-2">
-                  <div className="h-5 w-20 bg-slate-100 rounded-full" />
-                  <div className="h-5 w-16 bg-slate-100 rounded-full ml-auto" />
+        {/* ── TAB : Lois en cours ─────────────────────────────── */}
+        {activeTab === 'lois' && (
+          <>
+            {/* Parliament banner */}
+            <div className="bg-[#002395] rounded-2xl p-4 mb-5 text-white">
+              <div className="flex items-start gap-3">
+                <Landmark size={20} className="text-blue-200 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-sm mb-0.5">Ces lois sont actuellement débattues au Parlement.</p>
+                  <p className="text-blue-200 text-xs leading-relaxed">Votre avis compte. Exprimez-vous avant le vote.</p>
                 </div>
-                <div className="h-4 bg-slate-100 rounded-lg w-3/4" />
-                <div className="h-3 bg-slate-100 rounded-lg w-full" />
-                <div className="h-3 bg-slate-100 rounded-lg w-2/3" />
-                <div className="h-9 bg-slate-100 rounded-xl mt-2" />
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filtered.map(proposal => (
-              <ProposalCard
-                key={proposal.id}
-                proposal={proposal}
-                onOpen={() => setAgoraProposal(proposal)}
-              />
-            ))}
-          </div>
+            </div>
+
+            <div className="space-y-4">
+              {laws.map(law => (
+                <LawCard
+                  key={law.id}
+                  law={law}
+                  onOpen={() => setAgoraLaw(lawToProposal(law))}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── TAB : Propositions citoyennes ───────────────────── */}
+        {activeTab === 'propositions' && (
+          <>
+            {/* Stats banner */}
+            <div className="bg-indigo-600 rounded-2xl p-4 mb-5 text-white">
+              <div className="flex justify-around">
+                {[
+                  { value: proposals.length,                                    label: 'propositions' },
+                  { value: proposals.filter(p => p.stage === 'voting').length,  label: 'en vote' },
+                  { value: proposals.filter(p => p.stage === 'adopted').length, label: 'adoptées' },
+                ].map(({ value, label }) => (
+                  <div key={label} className="text-center">
+                    <div className="text-2xl font-black">{value}</div>
+                    <div className="text-indigo-200 text-xs">{label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Stage filters */}
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-4" style={{ scrollbarWidth: 'none' }}>
+              {filters.map(f => (
+                <button
+                  key={f.value}
+                  onClick={() => setActiveStage(f.value)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    activeStage === f.value
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* List */}
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 space-y-3 animate-pulse">
+                    <div className="flex gap-2">
+                      <div className="h-5 w-20 bg-slate-100 rounded-full" />
+                      <div className="h-5 w-16 bg-slate-100 rounded-full ml-auto" />
+                    </div>
+                    <div className="h-4 bg-slate-100 rounded-lg w-3/4" />
+                    <div className="h-3 bg-slate-100 rounded-lg w-full" />
+                    <div className="h-3 bg-slate-100 rounded-lg w-2/3" />
+                    <div className="h-9 bg-slate-100 rounded-xl mt-2" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filtered.map(proposal => (
+                  <ProposalCard
+                    key={proposal.id}
+                    proposal={proposal}
+                    onOpen={() => setAgoraProposal(proposal)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
+      {/* ── Modales Propositions citoyennes ─────────────────────── */}
       {agoraProposal && !votingProposal && (
         <AgoraModal
           proposal={agoraProposal}
@@ -865,12 +1063,28 @@ function HomePage() {
           hasVoted={votedIds.has(agoraProposal.id)}
         />
       )}
-
       {votingProposal && (
         <VotingBooth
           proposal={votingProposal}
           onVoted={(choice, hash) => handleVoted(votingProposal.id, choice, hash)}
           onClose={() => setVotingProposal(null)}
+        />
+      )}
+
+      {/* ── Modales Lois en cours ────────────────────────────────── */}
+      {agoraLaw && !votingLaw && (
+        <AgoraModal
+          proposal={agoraLaw}
+          onVote={() => setVotingLaw(agoraLaw)}
+          onClose={() => setAgoraLaw(null)}
+          hasVoted={lawVotedIds.has(agoraLaw.id)}
+        />
+      )}
+      {votingLaw && (
+        <VotingBooth
+          proposal={votingLaw}
+          onVoted={(choice, hash) => { void hash; handleLawVoted(votingLaw.id, choice) }}
+          onClose={() => setVotingLaw(null)}
         />
       )}
     </>
