@@ -840,14 +840,17 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
 }
 
 // ── Home Page ──────────────────────────────────────────────────
-function HomePage() {
+function HomePage({ initialCategory }: { initialCategory?: string }) {
   // ── Tab state ──────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'lois' | 'propositions'>('lois')
+  const [activeTab, setActiveTab] = useState<'lois' | 'propositions'>(
+    initialCategory ? 'propositions' : 'lois'
+  )
 
   // ── Propositions citoyennes state ──────────────────────────────
   const [proposals, setProposals]           = useState<Proposal[]>(PROPOSALS)
   const [loading, setLoading]               = useState(true)
   const [activeStage, setActiveStage]       = useState<Stage | 'all'>('all')
+  const [activeCategory, setActiveCategory] = useState<string | null>(initialCategory ?? null)
   const [agoraProposal, setAgoraProposal]   = useState<Proposal | null>(null)
   const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
   const [votedIds, setVotedIds]             = useState<Set<string>>(new Set())
@@ -881,9 +884,11 @@ function HomePage() {
     return () => { cancelled = true }
   }, [])
 
-  const filtered = activeStage === 'all'
-    ? proposals
-    : proposals.filter(p => p.stage === activeStage)
+  const filtered = proposals.filter(p => {
+    const stageOk    = activeStage === 'all' || p.stage === activeStage
+    const categoryOk = !activeCategory || p.category === activeCategory
+    return stageOk && categoryOk
+  })
 
   const handleVoted = useCallback((proposalId: string, choice: VoteChoice, proofHash: string) => {
     setVotedIds(prev => new Set([...prev, proposalId]))
@@ -1016,6 +1021,19 @@ function HomePage() {
               </div>
             </div>
 
+            {/* Active category badge */}
+            {activeCategory && (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs text-slate-500">Catégorie :</span>
+                <span className="flex items-center gap-1.5 bg-indigo-100 text-indigo-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                  {activeCategory}
+                  <button onClick={() => setActiveCategory(null)} className="hover:text-indigo-900">
+                    <X size={11} />
+                  </button>
+                </span>
+              </div>
+            )}
+
             {/* Stage filters */}
             <div className="flex gap-2 overflow-x-auto pb-2 mb-4" style={{ scrollbarWidth: 'none' }}>
               {filters.map(f => (
@@ -1102,19 +1120,90 @@ function HomePage() {
 }
 
 // ── Explore Page ───────────────────────────────────────────────
-function ExplorePage() {
-  const categories = [
-    { name: 'Économie',      count: 12, emoji: '💰', textColor: 'text-yellow-700' },
-    { name: 'Environnement', count: 18, emoji: '🌿', textColor: 'text-green-700' },
-    { name: 'Démocratie',   count: 9,  emoji: '🗳️', textColor: 'text-indigo-700' },
-    { name: 'Travail',       count: 7,  emoji: '⚒️', textColor: 'text-orange-700' },
-    { name: 'Éducation',    count: 11, emoji: '📚', textColor: 'text-blue-700' },
-    { name: 'Santé',         count: 14, emoji: '❤️', textColor: 'text-red-700' },
-    { name: 'Logement',      count: 6,  emoji: '🏠', textColor: 'text-purple-700' },
-    { name: 'Transparence',  count: 5,  emoji: '🔍', textColor: 'text-teal-700' },
-  ]
+const CATEGORY_META: { name: string; emoji: string; textColor: string }[] = [
+  { name: 'Économie',      emoji: '💰', textColor: 'text-yellow-700' },
+  { name: 'Environnement', emoji: '🌿', textColor: 'text-green-700'  },
+  { name: 'Démocratie',   emoji: '🗳️', textColor: 'text-indigo-700' },
+  { name: 'Travail',       emoji: '⚒️', textColor: 'text-orange-700' },
+  { name: 'Éducation',    emoji: '📚', textColor: 'text-blue-700'   },
+  { name: 'Santé',         emoji: '❤️', textColor: 'text-red-700'    },
+  { name: 'Logement',      emoji: '🏠', textColor: 'text-purple-700' },
+  { name: 'Transparence',  emoji: '🔍', textColor: 'text-teal-700'   },
+]
 
-  const trending = PROPOSALS.filter(p => p.stage === 'voting')
+function ExplorePage({ onSelectCategory }: { onSelectCategory: (cat: string) => void }) {
+  const [query, setQuery]           = useState('')
+  const [searchResults, setSearchResults] = useState<Proposal[]>([])
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({})
+  const [trending, setTrending]     = useState<Proposal[]>([])
+  const [loadingData, setLoadingData] = useState(true)
+
+  // All proposals for local search fallback
+  const [allProposals, setAllProposals] = useState<Proposal[]>(PROPOSALS)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchExploreData() {
+      try {
+        const { data, error } = await supabase
+          .from('proposals')
+          .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at')
+        if (error) throw error
+        if (!cancelled && data && data.length > 0) {
+          const mapped = (data as ProposalRow[]).map(mapRowToProposal)
+          setAllProposals(mapped)
+
+          // Category counts
+          const counts: Record<string, number> = {}
+          for (const p of mapped) {
+            counts[p.category] = (counts[p.category] ?? 0) + 1
+          }
+          setCategoryCounts(counts)
+
+          // Trending: top 3 by total votes
+          const sorted = [...mapped].sort(
+            (a, b) =>
+              (b.votes.pour + b.votes.contre + b.votes.blanc) -
+              (a.votes.pour + a.votes.contre + a.votes.blanc)
+          )
+          setTrending(sorted.slice(0, 3))
+        }
+      } catch {
+        // Fall back to mock data
+        const counts: Record<string, number> = {}
+        for (const p of PROPOSALS) {
+          counts[p.category] = (counts[p.category] ?? 0) + 1
+        }
+        setCategoryCounts(counts)
+        const sorted = [...PROPOSALS].sort(
+          (a, b) =>
+            (b.votes.pour + b.votes.contre + b.votes.blanc) -
+            (a.votes.pour + a.votes.contre + a.votes.blanc)
+        )
+        setTrending(sorted.slice(0, 3))
+      } finally {
+        if (!cancelled) setLoadingData(false)
+      }
+    }
+    fetchExploreData()
+    return () => { cancelled = true }
+  }, [])
+
+  // Real-time search filter
+  useEffect(() => {
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
+    const q = query.toLowerCase()
+    setSearchResults(
+      allProposals.filter(
+        p =>
+          p.title.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q)
+      ).slice(0, 6)
+    )
+  }, [query, allProposals])
 
   return (
     <div className="p-4">
@@ -1124,45 +1213,109 @@ function ExplorePage() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-5">
+      <div className="relative mb-2">
         <input
           type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
           placeholder="Rechercher une proposition…"
           className="w-full bg-slate-100 rounded-xl px-4 py-3 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-300"
         />
+        {query.length > 0 && (
+          <button
+            onClick={() => setQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
+
+      {/* Search results */}
+      {query.trim().length > 0 && (
+        <div className="mb-5 space-y-2">
+          {searchResults.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">Aucun résultat pour « {query} »</p>
+          ) : (
+            searchResults.map(p => (
+              <button
+                key={p.id}
+                onClick={() => onSelectCategory(p.category)}
+                className="w-full text-left bg-white rounded-xl border border-slate-100 px-4 py-3 shadow-sm active:scale-95 transition-all"
+              >
+                <p className="text-sm font-semibold text-slate-800 truncate">{p.title}</p>
+                <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">{p.description}</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <StageBadge stage={p.stage} />
+                  <span className="text-xs text-slate-400">{p.category}</span>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Categories */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        {categories.map(cat => (
-          <button
-            key={cat.name}
-            className="bg-white border border-slate-100 rounded-2xl p-4 text-left shadow-sm active:scale-95 transition-all"
-          >
-            <div className="text-2xl mb-2">{cat.emoji}</div>
-            <div className="font-bold text-slate-800 text-sm">{cat.name}</div>
-            <div className={`text-xs font-medium mt-0.5 ${cat.textColor}`}>{cat.count} propositions</div>
-          </button>
-        ))}
-      </div>
-
-      {/* Trending */}
-      <h2 className="font-bold text-slate-700 mb-3">Tendances cette semaine</h2>
-      <div className="space-y-2">
-        {trending.map((p, i) => (
-          <div key={p.id} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-slate-100">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-black text-sm flex items-center justify-center flex-shrink-0">
-              #{i + 1}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-700 truncate">{p.title}</p>
-              <p className="text-xs text-slate-400">
-                {(p.votes.pour + p.votes.contre + p.votes.blanc).toLocaleString('fr-FR')} votes
-              </p>
-            </div>
+      {query.trim().length === 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            {CATEGORY_META.map(cat => (
+              <button
+                key={cat.name}
+                onClick={() => onSelectCategory(cat.name)}
+                className="bg-white border border-slate-100 rounded-2xl p-4 text-left shadow-sm active:scale-95 transition-all"
+              >
+                <div className="text-2xl mb-2">{cat.emoji}</div>
+                <div className="font-bold text-slate-800 text-sm">{cat.name}</div>
+                {loadingData ? (
+                  <div className="h-3 w-16 bg-slate-100 rounded-full animate-pulse mt-1" />
+                ) : (
+                  <div className={`text-xs font-medium mt-0.5 ${cat.textColor}`}>
+                    {categoryCounts[cat.name] ?? 0} proposition{(categoryCounts[cat.name] ?? 0) !== 1 ? 's' : ''}
+                  </div>
+                )}
+              </button>
+            ))}
           </div>
-        ))}
-      </div>
+
+          {/* Trending */}
+          <h2 className="font-bold text-slate-700 mb-3">Tendances cette semaine</h2>
+          {loadingData ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-slate-100 animate-pulse">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 bg-slate-100 rounded w-3/4" />
+                    <div className="h-2.5 bg-slate-100 rounded w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {trending.map((p, i) => (
+                <button
+                  key={p.id}
+                  onClick={() => onSelectCategory(p.category)}
+                  className="w-full flex items-center gap-3 bg-white rounded-xl p-3 border border-slate-100 active:scale-95 transition-all text-left"
+                >
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-black text-sm flex items-center justify-center flex-shrink-0">
+                    #{i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-700 truncate">{p.title}</p>
+                    <p className="text-xs text-slate-400">
+                      {(p.votes.pour + p.votes.contre + p.votes.blanc).toLocaleString('fr-FR')} votes
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300 flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -1614,9 +1767,15 @@ function ProposeModal({ onClose }: { onClose: () => void }) {
 
 // ── Main App ───────────────────────────────────────────────────
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn]   = useState(false)
-  const [activePage, setActivePage]   = useState<NavPage>('home')
-  const [showPropose, setShowPropose] = useState(false)
+  const [isLoggedIn, setIsLoggedIn]         = useState(false)
+  const [activePage, setActivePage]         = useState<NavPage>('home')
+  const [showPropose, setShowPropose]       = useState(false)
+  const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
+
+  const handleSelectCategory = (cat: string) => {
+    setPendingCategory(cat)
+    setActivePage('home')
+  }
 
   const navItems: { page: NavPage; label: string; icon: ElementType }[] = [
     { page: 'home',    label: 'Accueil',  icon: Home },
@@ -1633,8 +1792,8 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto relative">
       {/* Scrollable content area */}
       <main className="flex-1 overflow-y-auto pb-24">
-        {activePage === 'home'    && <HomePage />}
-        {activePage === 'explore' && <ExplorePage />}
+        {activePage === 'home'    && <HomePage initialCategory={pendingCategory} />}
+        {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} />}
         {activePage === 'profile' && <ProfilePage />}
         {activePage === 'support' && <SupportPage />}
       </main>
