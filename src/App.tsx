@@ -308,10 +308,11 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 }
 
 // ── Agora Modal ────────────────────────────────────────────────
-function AgoraModal({ proposal, onVote, onClose }: {
+function AgoraModal({ proposal, onVote, onClose, hasVoted }: {
   proposal: Proposal
   onVote: () => void
   onClose: () => void
+  hasVoted?: boolean
 }) {
   const pourArgs  = proposal.arguments.filter(a => a.type === 'pour')
   const contreArgs = proposal.arguments.filter(a => a.type === 'contre')
@@ -387,13 +388,20 @@ function AgoraModal({ proposal, onVote, onClose }: {
       {/* CTA */}
       {proposal.stage === 'voting' && (
         <div className="p-4 border-t border-slate-100 bg-white flex-shrink-0">
-          <button
-            onClick={onVote}
-            className="w-full bg-indigo-600 text-white rounded-xl py-4 font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 transition-all"
-          >
-            <Vote size={18} />
-            Entrer dans l'isoloir
-          </button>
+          {hasVoted ? (
+            <div className="w-full bg-slate-100 text-slate-400 rounded-xl py-4 font-semibold flex items-center justify-center gap-2">
+              <Vote size={18} />
+              Vous avez déjà voté
+            </div>
+          ) : (
+            <button
+              onClick={onVote}
+              className="w-full bg-indigo-600 text-white rounded-xl py-4 font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 transition-all"
+            >
+              <Vote size={18} />
+              Entrer dans l'isoloir
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -760,6 +768,7 @@ function HomePage() {
           proposal={agoraProposal}
           onVote={() => setVotingProposal(agoraProposal)}
           onClose={() => setAgoraProposal(null)}
+          hasVoted={votedIds.has(agoraProposal.id)}
         />
       )}
 
