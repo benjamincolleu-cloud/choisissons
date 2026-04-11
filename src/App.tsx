@@ -6,7 +6,7 @@ import {
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
   Sprout, Users, Vote, Shield, BookOpen, HelpCircle,
   ChevronDown, ChevronUp, Lock, Star, Newspaper,
-  Building2, ArrowLeft, Info,
+  Building2, ArrowLeft, Info, Landmark,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -987,8 +987,16 @@ function ProfilePage() {
 }
 
 // ── Support Page ───────────────────────────────────────────────
+const COMMUNE_TIERS = [
+  { value: 'small',  label: 'Moins de 5 000 habitants',      price: '49€'  },
+  { value: 'medium', label: 'De 5 000 à 50 000 habitants',   price: '149€' },
+  { value: 'large',  label: 'Plus de 50 000 habitants',       price: '499€' },
+] as const
+type CommuneTier = typeof COMMUNE_TIERS[number]['value']
+
 function SupportPage() {
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected]       = useState<string | null>(null)
+  const [communeSize, setCommuneSize] = useState<CommuneTier>('small')
 
   const plans: {
     id: string
@@ -1101,6 +1109,79 @@ function SupportPage() {
             </div>
           )
         })}
+
+        {/* Commune & Collectivité — tarif dégressif */}
+        {(() => {
+          const tier = COMMUNE_TIERS.find(t => t.value === communeSize)!
+          const isSelected = selected === 'commune'
+          return (
+            <div className={`rounded-2xl border-2 overflow-hidden transition-all border-teal-300 ${isSelected ? 'shadow-lg' : ''}`}>
+              <div className="bg-teal-700 p-4 text-white flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Landmark size={20} />
+                  <span className="font-black text-lg">Commune &amp; Collectivité</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl font-black">{tier.price}</span>
+                  <span className="text-xs opacity-75 ml-0.5">/mois</span>
+                </div>
+              </div>
+              <div className="p-4 bg-white">
+                {/* Sélecteur tranche d'habitants */}
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Tranche d'habitants
+                  </label>
+                  <div className="space-y-2">
+                    {COMMUNE_TIERS.map(t => (
+                      <button
+                        key={t.value}
+                        onClick={() => setCommuneSize(t.value)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                          communeSize === t.value
+                            ? 'border-teal-500 bg-teal-50 text-teal-800'
+                            : 'border-slate-200 bg-slate-50 text-slate-600'
+                        }`}
+                      >
+                        <span>{t.label}</span>
+                        <span className={`font-black ${communeSize === t.value ? 'text-teal-700' : 'text-slate-400'}`}>
+                          {t.price}/mois
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Features */}
+                <ul className="space-y-2 mb-4">
+                  {[
+                    'Accès API données',
+                    'Tableau de bord pour les élus',
+                    'Consultation citoyenne intégrée',
+                    'Rapport d\'engagement mensuel',
+                    'Support prioritaire',
+                  ].map(f => (
+                    <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
+                      <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={() => setSelected(isSelected ? null : 'commune')}
+                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
+                    isSelected
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-teal-700 text-white'
+                  }`}
+                >
+                  {isSelected ? '✓ Sélectionné — Passer au paiement' : 'Équiper ma commune'}
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       <p className="text-center text-xs text-slate-400 mt-4 pb-2">
