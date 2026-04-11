@@ -2144,7 +2144,7 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-blue-200 text-xs font-semibold uppercase tracking-wider mb-1">Tableau de bord élu · Accès administrateur</p>
-            <h1 className="text-xl font-black leading-tight">Commune de {commune.name}</h1>
+            <h1 className="text-xl font-black leading-tight">{commune.name}</h1>
           </div>
           {commune.population != null && (
             <div className="text-right flex-shrink-0">
