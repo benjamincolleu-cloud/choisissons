@@ -13,7 +13,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────
 type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
-type NavPage = 'home' | 'explore' | 'profile' | 'support'
+type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'elu'
 
 interface Argument {
   id: string
@@ -1495,7 +1495,7 @@ interface MyProposalRecord {
   stage: Stage
 }
 
-function ProfilePage({ onLogout }: { onLogout: () => void }) {
+function ProfilePage({ onLogout, onNavigateElu }: { onLogout: () => void; onNavigateElu: (commune: Organisation) => void }) {
   const [showSettings, setShowSettings]   = useState(false)
   const [showLegal, setShowLegal]         = useState<string | null>(null)
   const [notifEnabled, setNotifEnabled]   = useState(true)
@@ -1507,10 +1507,11 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
   const [loadingMyProps, setLoadingMyProps]   = useState(true)
 
   // "Ma commune" state
-  const [communeQuery, setCommuneQuery]       = useState('')
-  const [communeResults, setCommuneResults]   = useState<Organisation[]>([])
-  const [loadingCommune, setLoadingCommune]   = useState(false)
+  const [communeQuery, setCommuneQuery]         = useState('')
+  const [communeResults, setCommuneResults]     = useState<Organisation[]>([])
+  const [loadingCommune, setLoadingCommune]     = useState(false)
   const [joinedCommuneIds, setJoinedCommuneIds] = useState<Set<string>>(new Set())
+  const [joinedCommunes, setJoinedCommunes]     = useState<Organisation[]>([])
 
   const userHash = MOCK_USER.name + '-hash'
 
@@ -1598,8 +1599,22 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
           .select('organisation_id')
           .eq('user_hash', userHash)
         if (error) throw error
-        if (!cancelled && data) {
-          setJoinedCommuneIds(new Set(data.map((r: { organisation_id: string }) => r.organisation_id)))
+        if (!cancelled && data && data.length > 0) {
+          const ids = data.map((r: { organisation_id: string }) => r.organisation_id)
+          setJoinedCommuneIds(new Set(ids))
+          // Fetch full org objects for élu access
+          const { data: orgData } = await supabase
+            .from('organisations')
+            .select('id,name,type,description,population')
+            .in('id', ids)
+            .eq('type', 'commune')
+          if (!cancelled) {
+            if (orgData && orgData.length > 0) {
+              setJoinedCommunes(orgData as Organisation[])
+            } else {
+              setJoinedCommunes(MOCK_ORGANISATIONS.filter(o => ids.includes(o.id) && o.type === 'commune'))
+            }
+          }
         }
       } catch { /* ignore */ }
     }
@@ -1983,6 +1998,317 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
                 className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm active:scale-95 transition-all"
               >
                 Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Elected Dashboard ──────────────────────────────────────────
+interface LocalConsultation {
+  id: string
+  title: string
+  description: string
+  status: string
+  created_at: string
+  votes_pour: number
+  votes_contre: number
+  votes_blanc: number
+}
+
+function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: () => void }) {
+  const [memberCount, setMemberCount]       = useState<number | null>(null)
+  const [nationalLaws, setNationalLaws]     = useState<Proposal[]>([])
+  const [consultations, setConsultations]   = useState<LocalConsultation[]>([])
+  const [loadingStats, setLoadingStats]     = useState(true)
+
+  const [showForm, setShowForm]             = useState(false)
+  const [formTitle, setFormTitle]           = useState('')
+  const [formDescription, setFormDescription] = useState('')
+  const [formDuration, setFormDuration]     = useState(30)
+  const [submitting, setSubmitting]         = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchData() {
+      try {
+        const [membersRes, lawsRes, consultRes] = await Promise.all([
+          supabase.from('citizen_organisations').select('id', { count: 'exact', head: true }).eq('organisation_id', commune.id),
+          supabase.from('proposals').select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at').eq('status', 'voting'),
+          supabase.from('proposals').select('id,title,description,status,created_at,votes_pour,votes_contre,votes_blanc').eq('author', commune.name),
+        ])
+        if (!cancelled) {
+          if (membersRes.count !== null) setMemberCount(membersRes.count)
+          if (lawsRes.data && lawsRes.data.length > 0) {
+            setNationalLaws((lawsRes.data as ProposalRow[]).map(mapRowToProposal))
+          } else {
+            setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
+          }
+          if (consultRes.data) setConsultations(consultRes.data as LocalConsultation[])
+        }
+      } catch {
+        if (!cancelled) setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
+      } finally {
+        if (!cancelled) setLoadingStats(false)
+      }
+    }
+    fetchData()
+    return () => { cancelled = true }
+  }, [commune.id, commune.name])
+
+  const totalVotes = nationalLaws.reduce(
+    (sum, l) => sum + l.votes.pour + l.votes.contre + l.votes.blanc, 0
+  )
+  const participationRate = memberCount && memberCount > 0
+    ? Math.min(Math.round((totalVotes / memberCount) * 100), 100)
+    : 0
+  const activeConsultations = consultations.filter(c => c.status === 'voting').length
+
+  async function handleCreate() {
+    if (!formTitle.trim()) return
+    setSubmitting(true)
+    const draft: LocalConsultation = {
+      id: `local-${Date.now()}`,
+      title: formTitle,
+      description: formDescription,
+      status: 'voting',
+      created_at: new Date().toISOString(),
+      votes_pour: 0, votes_contre: 0, votes_blanc: 0,
+    }
+    setConsultations(prev => [draft, ...prev])
+    setShowForm(false)
+    setFormTitle(''); setFormDescription(''); setFormDuration(30)
+    try {
+      const { error } = await supabase.from('proposals').insert({
+        title: formTitle,
+        description: formDescription,
+        status: 'voting',
+        author: commune.name,
+        category: 'Local',
+        supports: 0,
+        votes_pour: 0, votes_contre: 0, votes_blanc: 0,
+        tags: [],
+      })
+      if (error) throw error
+    } catch { /* local state is source of truth */ }
+    setSubmitting(false)
+  }
+
+  const statusTag: Record<string, { text: string; color: string }> = {
+    voting:   { text: 'En vote',    color: 'bg-indigo-100 text-indigo-700' },
+    seedling: { text: 'Brouillon',  color: 'bg-slate-100 text-slate-600' },
+    review:   { text: 'En révision', color: 'bg-amber-100 text-amber-700' },
+    adopted:  { text: 'Terminée',   color: 'bg-green-100 text-green-700' },
+    rejected: { text: 'Clôturée',   color: 'bg-red-100 text-red-600' },
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div style={{ backgroundColor: '#0c447c' }} className="px-5 pt-10 pb-6 text-white">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-blue-200 text-xs font-medium mb-5 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={14} />
+          Retour à Mon Compte
+        </button>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-blue-200 text-xs font-semibold uppercase tracking-wider mb-1">Tableau de bord élu · Accès administrateur</p>
+            <h1 className="text-xl font-black leading-tight">Commune de {commune.name}</h1>
+          </div>
+          {commune.population != null && (
+            <div className="text-right flex-shrink-0">
+              <p className="text-2xl font-black">{commune.population.toLocaleString('fr-FR')}</p>
+              <p className="text-blue-200 text-xs">habitants</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Stat cards */}
+      <div className="px-4 pt-4">
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          {[
+            { label: 'Inscrits CHOISISSONS', value: loadingStats ? '—' : (memberCount ?? 0).toLocaleString('fr-FR'), sub: 'habitants enregistrés' },
+            { label: 'Taux de participation', value: loadingStats ? '—' : `${participationRate}%`, sub: 'aux votes nationaux' },
+            { label: 'Consultations actives', value: loadingStats ? '—' : activeConsultations.toString(), sub: 'consultations locales' },
+            { label: 'Lois en vote', value: loadingStats ? '—' : nationalLaws.length.toString(), sub: 'actuellement au Parlement' },
+          ].map(stat => (
+            <div key={stat.label} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+              <p className="text-xs text-slate-500 leading-snug mb-1">{stat.label}</p>
+              <p className="text-2xl font-black text-slate-800">{stat.value}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{stat.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* National laws */}
+        <div className="mb-5">
+          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            Lois nationales — avis de la commune
+          </h2>
+          {loadingStats ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="bg-white rounded-2xl p-4 border border-slate-100 animate-pulse">
+                  <div className="h-4 bg-slate-100 rounded w-3/4 mb-3" />
+                  <div className="h-2 bg-slate-100 rounded w-full" />
+                </div>
+              ))}
+            </div>
+          ) : nationalLaws.length === 0 ? (
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 text-center">
+              <p className="text-sm text-slate-400">Aucune loi en vote actuellement</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {nationalLaws.map(law => {
+                const total = law.votes.pour + law.votes.contre + law.votes.blanc
+                const pourPct   = total > 0 ? Math.round((law.votes.pour   / total) * 100) : 0
+                const contrePct = total > 0 ? Math.round((law.votes.contre / total) * 100) : 0
+                const blancPct  = 100 - pourPct - contrePct
+                return (
+                  <div key={law.id} className="bg-white rounded-2xl p-4 border border-slate-100">
+                    <p className="text-sm font-semibold text-slate-800 mb-0.5">{law.title}</p>
+                    <p className="text-xs text-slate-400 mb-3">{total.toLocaleString('fr-FR')} avis exprimés</p>
+                    {total > 0 ? (
+                      <>
+                        <div className="flex h-2 rounded-full overflow-hidden mb-1.5">
+                          <div className="bg-green-500 transition-all" style={{ width: `${pourPct}%` }} />
+                          <div className="bg-red-400 transition-all"   style={{ width: `${contrePct}%` }} />
+                          <div className="bg-slate-200 transition-all" style={{ width: `${blancPct}%` }} />
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-green-600 font-semibold">Pour {pourPct}%</span>
+                          <span className="text-slate-400">Blanc {blancPct}%</span>
+                          <span className="text-red-500 font-semibold">Contre {contrePct}%</span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-300 italic">Aucun avis enregistré pour cette commune</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Local consultations */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Consultations locales</h2>
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white active:scale-95 transition-all"
+              style={{ backgroundColor: '#0c447c' }}
+            >
+              <Plus size={12} />
+              Lancer une consultation
+            </button>
+          </div>
+
+          {loadingStats ? (
+            <div className="bg-white rounded-2xl p-4 border border-slate-100 animate-pulse">
+              <div className="h-4 bg-slate-100 rounded w-2/3" />
+            </div>
+          ) : consultations.length === 0 ? (
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 text-center">
+              <p className="text-sm text-slate-400 mb-1">Aucune consultation locale</p>
+              <p className="text-xs text-slate-300">Lancez la première consultation citoyenne de votre commune</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {consultations.map(c => {
+                const s = statusTag[c.status] ?? { text: c.status, color: 'bg-slate-100 text-slate-600' }
+                const total = (c.votes_pour ?? 0) + (c.votes_contre ?? 0) + (c.votes_blanc ?? 0)
+                return (
+                  <div key={c.id} className="bg-white rounded-2xl p-4 border border-slate-100">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-sm font-semibold text-slate-800 flex-1 leading-snug">{c.title}</p>
+                      <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${s.color}`}>
+                        {s.text}
+                      </span>
+                    </div>
+                    {c.description && (
+                      <p className="text-xs text-slate-500 line-clamp-2 mb-1">{c.description}</p>
+                    )}
+                    <p className="text-xs text-slate-300">{c.created_at?.slice(0, 10)} · {total} vote{total !== 1 ? 's' : ''}</p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Create consultation modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end p-4">
+          <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 text-sm">Nouvelle consultation locale</h3>
+              <button
+                onClick={() => setShowForm(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
+              >
+                <X size={15} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Titre</label>
+                <input
+                  type="text"
+                  value={formTitle}
+                  onChange={e => setFormTitle(e.target.value)}
+                  placeholder="Ex : Aménagement de la place centrale"
+                  className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Description</label>
+                <textarea
+                  value={formDescription}
+                  onChange={e => setFormDescription(e.target.value)}
+                  placeholder="Décrivez l'objet de la consultation..."
+                  rows={3}
+                  className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Durée (jours)</label>
+                <input
+                  type="number"
+                  value={formDuration}
+                  onChange={e => setFormDuration(Math.max(1, Number(e.target.value)))}
+                  min={1}
+                  max={365}
+                  className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            </div>
+            <div className="px-5 pb-5 flex gap-3">
+              <button
+                onClick={() => setShowForm(false)}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={!formTitle.trim() || submitting}
+                className="flex-1 py-3 rounded-xl text-white font-semibold text-sm disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                style={{ backgroundColor: '#0c447c' }}
+              >
+                {submitting
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : 'Lancer'}
               </button>
             </div>
           </div>
