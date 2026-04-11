@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient'
 import {
   Home, Compass, User, Heart, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
-  Sprout, Users, Vote, Shield, BookOpen, HelpCircle,
+  Sprout, Users, Vote, Shield, BookOpen,
   Lock, Star, Newspaper,
   Building2, ArrowLeft, Info, Landmark,
   Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText,
