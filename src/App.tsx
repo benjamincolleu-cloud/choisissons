@@ -5,9 +5,9 @@ import {
   Home, Compass, User, Heart, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
   Sprout, Users, Vote, Shield, BookOpen, HelpCircle,
-  ChevronDown, ChevronUp, Lock, Star, Newspaper,
+  Lock, Star, Newspaper,
   Building2, ArrowLeft, Info, Landmark,
-  Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText, Scale,
+  Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -1321,53 +1321,122 @@ function ExplorePage({ onSelectCategory }: { onSelectCategory: (cat: string) => 
   )
 }
 
-// ── Profile Page ───────────────────────────────────────────────
+// ── Account Page ───────────────────────────────────────────────
+interface VoteRecord {
+  proposalId: string
+  choice: VoteChoice
+  title: string
+  date: string
+}
+
+interface MyProposalRecord {
+  id: string
+  title: string
+  stage: Stage
+}
+
 function ProfilePage({ onLogout }: { onLogout: () => void }) {
-  const [openFaq, setOpenFaq]           = useState<number | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showLegal, setShowLegal]       = useState<string | null>(null)
-  const [notifEnabled, setNotifEnabled] = useState(true)
-  const [language, setLanguage]         = useState('FR')
+  const [showSettings, setShowSettings]   = useState(false)
+  const [showLegal, setShowLegal]         = useState<string | null>(null)
+  const [notifEnabled, setNotifEnabled]   = useState(true)
+  const [language, setLanguage]           = useState('FR')
 
-  const faqs = [
-    {
-      q: 'Mon vote est-il vraiment anonyme ?',
-      a: "Oui. Votre identité est dissociée de votre bulletin avant chiffrement. Un hash SHA-256 unique prouve que vous avez voté sans révéler votre choix.",
-    },
-    {
-      q: 'Qui compose le jury citoyen ?',
-      a: "Le jury est tiré au sort parmi les citoyens inscrits, sur le modèle des jurés d'assises. Il examine les propositions ayant atteint 10 000 signatures.",
-    },
-    {
-      q: "Comment une proposition est-elle adoptée ?",
-      a: 'Une proposition atteint le statut "Adoptée" si elle obtient plus de 50% de votes Pour, avec un quorum minimum de 100 000 votants.',
-    },
-    {
-      q: 'Mes données sont-elles partagées ?',
-      a: "Non. Choisissons ne vend et ne partage aucune donnée personnelle. L'authentification FranceConnect ne transmet que votre commune.",
-    },
-    {
-      q: 'Comment soumettre une proposition ?',
-      a: 'Appuyez sur le bouton "+" en bas de l\'écran. Votre proposition est d\'abord examinée par notre équipe avant publication en Pépinière.',
-    },
-  ]
+  const [votedProposals, setVotedProposals]   = useState<VoteRecord[]>([])
+  const [loadingVotes, setLoadingVotes]       = useState(true)
+  const [myProposals, setMyProposals]         = useState<MyProposalRecord[]>([])
+  const [loadingMyProps, setLoadingMyProps]   = useState(true)
 
-  const roadmap = [
-    {
-      phase: 'Phase 1',
-      items: ['Login FranceConnect', 'Supabase connecté', 'Vote SHA-256', 'Déploiement Vercel'],
-      done: true,
-    },
-    {
-      phase: 'Phase 2',
-      items: ['FranceConnect réel', 'Jury citoyen', 'Stripe paiements', 'API Assemblée Nationale'],
-      done: false,
-    },
-    {
-      phase: 'Phase 3',
-      items: ['Application mobile', 'Audit sécurité ANSSI', 'Zero-knowledge proof'],
-      done: false,
-    },
+  const userHash = MOCK_USER.name + '-hash'
+
+  // Fetch "Mes votes" from Supabase
+  useEffect(() => {
+    let cancelled = false
+    async function fetchVotes() {
+      try {
+        const { data: voteRows, error } = await supabase
+          .from('votes')
+          .select('proposal_id, vote_choice, created_at')
+          .eq('user_hash', userHash)
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        if (!voteRows || voteRows.length === 0) return
+
+        const ids = voteRows.map((v: { proposal_id: string }) => v.proposal_id)
+        const { data: propRows } = await supabase
+          .from('proposals')
+          .select('id, title')
+          .in('id', ids)
+
+        const titleMap: Record<string, string> = {}
+        for (const p of (propRows ?? []) as { id: string; title: string }[]) {
+          titleMap[p.id] = p.title
+        }
+
+        if (!cancelled) {
+          setVotedProposals(
+            voteRows.map((v: { proposal_id: string; vote_choice: string; created_at: string }) => ({
+              proposalId: v.proposal_id,
+              choice: v.vote_choice as VoteChoice,
+              title: titleMap[v.proposal_id] ?? 'Proposition inconnue',
+              date: v.created_at?.slice(0, 10) ?? '',
+            }))
+          )
+        }
+      } catch {
+        // Supabase unavailable — section stays empty
+      } finally {
+        if (!cancelled) setLoadingVotes(false)
+      }
+    }
+    fetchVotes()
+    return () => { cancelled = true }
+  }, [userHash])
+
+  // Fetch "Mes propositions" from Supabase (author match on user name)
+  useEffect(() => {
+    let cancelled = false
+    async function fetchMyProposals() {
+      try {
+        const { data, error } = await supabase
+          .from('proposals')
+          .select('id, title, status')
+          .eq('author', MOCK_USER.name)
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        if (!cancelled && data) {
+          setMyProposals(
+            (data as { id: string; title: string; status: string }[]).map(p => ({
+              id: p.id,
+              title: p.title,
+              stage: (p.status as Stage) ?? 'seedling',
+            }))
+          )
+        }
+      } catch {
+        // Supabase unavailable — section stays empty
+      } finally {
+        if (!cancelled) setLoadingMyProps(false)
+      }
+    }
+    fetchMyProposals()
+    return () => { cancelled = true }
+  }, [])
+
+  const choiceLabel: Record<VoteChoice, string> = {
+    pour: 'Pour', contre: 'Contre', blanc: 'Blanc',
+  }
+  const choiceColor: Record<VoteChoice, string> = {
+    pour: 'text-green-600 bg-green-50',
+    contre: 'text-red-500 bg-red-50',
+    blanc: 'text-slate-500 bg-slate-100',
+  }
+
+  const transparencyRows = [
+    { label: 'Code source',       value: 'Open source (GitHub)',     ok: true },
+    { label: 'Hébergement',       value: 'Vercel / Supabase EU',     ok: true },
+    { label: 'Chiffrement votes', value: 'SHA-256 + Zero-knowledge', ok: true },
+    { label: 'Audit indépendant', value: 'Prévu Q3 2026',           ok: false },
+    { label: 'Certifié ANSSI',    value: 'En cours',                ok: false },
   ]
 
   const legalDocs: Record<string, { title: string; content: React.ReactNode }> = {
@@ -1395,10 +1464,25 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
     legal: {
       title: 'Mentions légales',
       content: (
-        <div className="space-y-2 text-sm text-slate-600">
-          <p><span className="font-semibold text-slate-700">Éditeur :</span> Association CHOISISSONS (en cours de création)</p>
-          <p><span className="font-semibold text-slate-700">Hébergement :</span> Vercel Inc. / Supabase (West EU Paris)</p>
-          <p><span className="font-semibold text-slate-700">Directeur de publication :</span> Benjamin Colleu</p>
+        <div className="space-y-4 text-sm text-slate-600">
+          <div className="space-y-2">
+            <p><span className="font-semibold text-slate-700">Éditeur :</span> Association CHOISISSONS (en cours de création)</p>
+            <p><span className="font-semibold text-slate-700">Hébergement :</span> Vercel Inc. / Supabase (West EU Paris)</p>
+            <p><span className="font-semibold text-slate-700">Directeur de publication :</span> Benjamin Colleu</p>
+          </div>
+          <div className="border-t border-slate-100 pt-4">
+            <p className="font-semibold text-slate-700 mb-2">Transparence du système</p>
+            <div className="space-y-1">
+              {transparencyRows.map(item => (
+                <div key={item.label} className="flex justify-between items-center py-1 border-b border-slate-50 last:border-0">
+                  <span className="text-slate-500">{item.label}</span>
+                  <span className={`font-medium text-xs ${item.ok ? 'text-green-600' : 'text-amber-500'}`}>
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ),
     },
@@ -1406,17 +1490,22 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="p-4">
+      {/* Header */}
+      <div className="mb-5">
+        <h1 className="text-2xl font-black text-slate-800">Mon Compte</h1>
+      </div>
+
       {/* User card */}
-      <div className="bg-indigo-600 rounded-2xl p-5 mb-5 text-white">
+      <div className="bg-indigo-600 rounded-2xl p-5 mb-4 text-white">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-indigo-500 flex items-center justify-center text-xl font-black shadow-lg flex-shrink-0">
               {MOCK_USER.avatar}
             </div>
             <div>
-              <h2 className="font-black text-lg">{MOCK_USER.name}</h2>
-              <p className="text-indigo-200 text-sm">{MOCK_USER.commune}</p>
-              <div className="flex gap-3 mt-1 text-xs text-indigo-200">
+              <p className="font-black text-lg leading-tight">{MOCK_USER.name}</p>
+              <p className="text-indigo-200 text-sm mt-0.5">{MOCK_USER.commune}</p>
+              <div className="flex gap-3 mt-2 text-xs text-indigo-300">
                 <span>{MOCK_USER.votesCount} votes</span>
                 <span>·</span>
                 <span>{MOCK_USER.proposalsCount} propositions</span>
@@ -1425,7 +1514,7 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
           </div>
           <button
             onClick={() => setShowSettings(true)}
-            className="w-9 h-9 rounded-xl bg-indigo-500/60 flex items-center justify-center hover:bg-indigo-500 transition-colors flex-shrink-0"
+            className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors flex-shrink-0"
             aria-label="Réglages"
           >
             <Settings size={17} className="text-white" />
@@ -1433,66 +1522,65 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
         </div>
       </div>
 
-      {/* Transparency */}
+      {/* Mes votes */}
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Shield size={16} className="text-indigo-600" />
-          <h3 className="font-bold text-slate-800">Transparence du système</h3>
-        </div>
-        <div className="space-y-2 text-sm">
-          {[
-            { label: 'Code source',       value: 'Open source (GitHub)',     ok: true },
-            { label: 'Hébergement',       value: 'Vercel / Supabase EU',     ok: true },
-            { label: 'Chiffrement votes', value: 'SHA-256 + Zero-knowledge', ok: true },
-            { label: 'Audit indépendant', value: 'Prévu Q3 2026',           ok: false },
-            { label: 'Certifié ANSSI',    value: 'En cours',                ok: false },
-          ].map(item => (
-            <div key={item.label} className="flex justify-between items-center py-1.5 border-b border-slate-50 last:border-0">
-              <span className="text-slate-500">{item.label}</span>
-              <span className={`font-medium text-xs ${item.ok ? 'text-green-600' : 'text-amber-500'}`}>
-                {item.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Roadmap */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <BookOpen size={16} className="text-indigo-600" />
-          <h3 className="font-bold text-slate-800">Feuille de route</h3>
-        </div>
-        <div className="space-y-3">
-          {roadmap.map(phase => (
-            <div key={phase.phase} className={`rounded-xl p-3 ${phase.done ? 'bg-green-50' : 'bg-slate-50'}`}>
-              <div className="flex items-center gap-2 mb-1">
-                {phase.done
-                  ? <CheckCircle size={14} className="text-green-500" />
-                  : <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-300" />}
-                <span className={`font-semibold text-sm ${phase.done ? 'text-green-700' : 'text-slate-600'}`}>
-                  {phase.phase}
+        <h3 className="font-bold text-slate-800 text-sm mb-3">Mes votes</h3>
+        {loadingVotes ? (
+          <div className="space-y-2">
+            {[1, 2].map(i => (
+              <div key={i} className="h-12 bg-slate-50 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : votedProposals.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">
+            Aucun vote enregistré pour le moment.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {votedProposals.map(v => (
+              <div key={v.proposalId} className="flex items-center justify-between gap-3 py-2 border-b border-slate-50 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-700 font-medium truncate">{v.title}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{v.date}</p>
+                </div>
+                <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${choiceColor[v.choice]}`}>
+                  {choiceLabel[v.choice]}
                 </span>
               </div>
-              <ul className="ml-5 space-y-0.5">
-                {phase.items.map(item => (
-                  <li key={item} className={`text-xs ${phase.done ? 'text-green-600' : 'text-slate-500'}`}>
-                    • {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Legal */}
+      {/* Mes propositions */}
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Scale size={16} className="text-indigo-600" />
-          <h3 className="font-bold text-slate-800">Informations légales</h3>
-        </div>
-        <div className="space-y-2">
+        <h3 className="font-bold text-slate-800 text-sm mb-3">Mes propositions</h3>
+        {loadingMyProps ? (
+          <div className="space-y-2">
+            {[1].map(i => (
+              <div key={i} className="h-12 bg-slate-50 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : myProposals.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">
+            Vous n'avez pas encore soumis de proposition.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {myProposals.map(p => (
+              <div key={p.id} className="flex items-center justify-between gap-3 py-2 border-b border-slate-50 last:border-0">
+                <p className="text-sm text-slate-700 font-medium flex-1 min-w-0 truncate">{p.title}</p>
+                <StageBadge stage={p.stage} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Informations légales */}
+      <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+        <h3 className="font-bold text-slate-800 text-sm mb-3">Informations légales</h3>
+        <div className="space-y-1">
           {[
             { key: 'cgu',     label: "Conditions Générales d'Utilisation", icon: FileText },
             { key: 'privacy', label: 'Politique de confidentialité',       icon: Shield },
@@ -1501,82 +1589,50 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
             <button
               key={key}
               onClick={() => setShowLegal(key)}
-              className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors active:scale-95"
+              className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors active:scale-95 text-left"
             >
               <div className="flex items-center gap-2.5">
-                <Icon size={15} className="text-slate-500" />
-                <span className="text-sm text-slate-700 font-medium">{label}</span>
+                <Icon size={15} className="text-slate-400" />
+                <span className="text-sm text-slate-700">{label}</span>
               </div>
-              <ChevronRight size={15} className="text-slate-400" />
+              <ChevronRight size={14} className="text-slate-300" />
             </button>
           ))}
           <a
             href="https://github.com/benjamincolleu-cloud/choisissons"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors active:scale-95"
+            className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors active:scale-95"
           >
             <div className="flex items-center gap-2.5">
-              <ExternalLink size={15} className="text-slate-500" />
-              <span className="text-sm text-slate-700 font-medium">Open Source</span>
+              <ExternalLink size={15} className="text-slate-400" />
+              <span className="text-sm text-slate-700">Code source — GitHub</span>
             </div>
-            <span className="text-xs text-indigo-500 font-medium">GitHub ↗</span>
+            <ChevronRight size={14} className="text-slate-300" />
           </a>
         </div>
       </div>
 
-      {/* FAQ */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <HelpCircle size={16} className="text-indigo-600" />
-          <h3 className="font-bold text-slate-800">FAQ</h3>
-        </div>
-        <div className="space-y-2">
-          {faqs.map((faq, i) => (
-            <div key={i} className="border border-slate-100 rounded-xl overflow-hidden">
-              <button
-                onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                className="w-full flex items-center justify-between p-3 text-left gap-2"
-              >
-                <span className="font-medium text-slate-700 text-sm">{faq.q}</span>
-                {openFaq === i
-                  ? <ChevronUp size={15} className="text-slate-400 flex-shrink-0" />
-                  : <ChevronDown size={15} className="text-slate-400 flex-shrink-0" />}
-              </button>
-              {openFaq === i && (
-                <div className="px-3 pb-3 text-sm text-slate-500 leading-relaxed border-t border-slate-50">
-                  {faq.a}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Logout */}
+      {/* Déconnexion */}
       <button
         onClick={onLogout}
-        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-red-200 text-red-500 font-semibold bg-red-50 hover:bg-red-100 active:scale-95 transition-all mb-4"
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-red-200 text-red-500 font-semibold text-sm bg-white hover:bg-red-50 active:scale-95 transition-all mb-5"
       >
-        <LogOut size={17} />
+        <LogOut size={16} />
         Se déconnecter
       </button>
 
       {/* Version */}
-      <p className="text-center text-xs text-slate-400 pb-2">
+      <p className="text-center text-xs text-slate-300 pb-2">
         CHOISISSONS v1.0 — Prototype Alpha
       </p>
 
-      {/* ── Settings modal ──────────────────────────────────────── */}
+      {/* ── Réglages modal ──────────────────────────────────────── */}
       {showSettings && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end p-4">
           <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl">
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Settings size={17} className="text-indigo-600" />
-                <h3 className="font-black text-slate-800">Réglages</h3>
-              </div>
+              <h3 className="font-bold text-slate-800 text-sm">Réglages</h3>
               <button
                 onClick={() => setShowSettings(false)}
                 className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
@@ -1584,65 +1640,55 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
                 <X size={16} className="text-slate-500" />
               </button>
             </div>
-
-            <div className="p-5 space-y-4">
-              {/* Notifications toggle */}
+            <div className="p-5 space-y-5">
+              {/* Notifications */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
-                    <Bell size={16} className="text-indigo-600" />
-                  </div>
+                  <Bell size={16} className="text-slate-500" />
                   <div>
-                    <p className="font-semibold text-slate-800 text-sm">Notifications</p>
+                    <p className="text-sm font-semibold text-slate-800">Notifications</p>
                     <p className="text-xs text-slate-400">Alertes votes et propositions</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setNotifEnabled(v => !v)}
-                  className={`w-12 h-6 rounded-full transition-colors relative ${notifEnabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                  className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${notifEnabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
                   role="switch"
                   aria-checked={notifEnabled}
                 >
-                  <span
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${notifEnabled ? 'translate-x-6' : 'translate-x-0.5'}`}
-                  />
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${notifEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
                 </button>
               </div>
-
-              {/* Language */}
+              {/* Langue */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
-                    <Globe size={16} className="text-indigo-600" />
-                  </div>
+                  <Globe size={16} className="text-slate-500" />
                   <div>
-                    <p className="font-semibold text-slate-800 text-sm">Langue</p>
+                    <p className="text-sm font-semibold text-slate-800">Langue</p>
                     <p className="text-xs text-slate-400">Interface de l'application</p>
                   </div>
                 </div>
                 <select
                   value={language}
                   onChange={e => setLanguage(e.target.value)}
-                  className="text-sm font-semibold text-slate-700 bg-slate-100 rounded-lg px-3 py-1.5 outline-none cursor-pointer"
+                  className="text-sm font-medium text-slate-700 bg-slate-100 rounded-lg px-3 py-1.5 outline-none cursor-pointer"
                 >
-                  <option value="FR">🇫🇷 FR</option>
-                  <option value="EN">🇬🇧 EN</option>
+                  <option value="FR">FR — Français</option>
+                  <option value="EN">EN — English</option>
                 </select>
               </div>
-
-              {/* Delete account */}
-              <div className="pt-2 border-t border-slate-100">
-                <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 active:scale-95 transition-all">
-                  <Trash2 size={16} />
-                  <span className="font-semibold text-sm">Supprimer mon compte</span>
+              {/* Supprimer le compte */}
+              <div className="pt-3 border-t border-slate-100">
+                <button className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-colors active:scale-95 text-sm font-semibold">
+                  <Trash2 size={15} />
+                  Supprimer mon compte
                 </button>
               </div>
             </div>
-
             <div className="px-5 pb-5">
               <button
                 onClick={() => setShowSettings(false)}
-                className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm active:scale-95 transition-all"
+                className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm active:scale-95 transition-all"
               >
                 Fermer
               </button>
@@ -1651,12 +1697,12 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
         </div>
       )}
 
-      {/* ── Legal modal ─────────────────────────────────────────── */}
+      {/* ── Mentions légales modal ───────────────────────────────── */}
       {showLegal && legalDocs[showLegal] && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end p-4">
-          <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h3 className="font-black text-slate-800 text-sm leading-tight pr-4">
+          <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+              <h3 className="font-bold text-slate-800 text-sm leading-tight pr-4">
                 {legalDocs[showLegal].title}
               </h3>
               <button
@@ -1666,10 +1712,10 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
                 <X size={16} className="text-slate-500" />
               </button>
             </div>
-            <div className="p-5">
+            <div className="p-5 overflow-y-auto flex-1">
               {legalDocs[showLegal].content}
             </div>
-            <div className="px-5 pb-5">
+            <div className="px-5 pb-5 flex-shrink-0">
               <button
                 onClick={() => setShowLegal(null)}
                 className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm active:scale-95 transition-all"
@@ -2007,7 +2053,7 @@ export default function App() {
   const navItems: { page: NavPage; label: string; icon: ElementType }[] = [
     { page: 'home',    label: 'Accueil',  icon: Home },
     { page: 'explore', label: 'Explorer', icon: Compass },
-    { page: 'profile', label: 'Profil',   icon: User },
+    { page: 'profile', label: 'Mon Compte', icon: User },
     { page: 'support', label: 'Soutenir', icon: Heart },
   ]
 
