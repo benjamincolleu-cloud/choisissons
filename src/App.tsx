@@ -1251,16 +1251,19 @@ function ExplorePage({ onSelectCategory }: { onSelectCategory: (cat: string) => 
     return () => { cancelled = true }
   }, [exploreTab, orgSubTab])
 
-  function handleFollowOrg(orgId: string) {
+  async function handleFollowOrg(orgId: string) {
     setFollowedOrgIds(prev => {
       const next = new Set(prev)
       next.add(orgId)
       return next
     })
-    void supabase.from('citizen_organisations').insert({
-      user_hash: MOCK_USER.name + '-hash',
-      organisation_id: orgId,
-    }).then(null, () => {})
+    try {
+      const { error } = await supabase.from('citizen_organisations').insert({
+        user_hash: MOCK_USER.name + '-hash',
+        organisation_id: orgId,
+      })
+      if (error) throw error
+    } catch { /* local state is source of truth */ }
   }
 
   // Real-time search filter
@@ -1633,12 +1636,15 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
     return () => clearTimeout(timer)
   }, [communeQuery])
 
-  function handleJoinCommune(orgId: string) {
+  async function handleJoinCommune(orgId: string) {
     setJoinedCommuneIds(prev => { const s = new Set(prev); s.add(orgId); return s })
-    supabase.from('citizen_organisations').insert({
-      user_hash: userHash,
-      organisation_id: orgId,
-    }).catch(() => {})
+    try {
+      const { error } = await supabase.from('citizen_organisations').insert({
+        user_hash: userHash,
+        organisation_id: orgId,
+      })
+      if (error) throw error
+    } catch { /* local state is source of truth */ }
   }
 
   const choiceLabel: Record<VoteChoice, string> = {
