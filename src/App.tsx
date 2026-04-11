@@ -1431,14 +1431,6 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
     blanc: 'text-slate-500 bg-slate-100',
   }
 
-  const transparencyRows = [
-    { label: 'Code source',       value: 'Open source (GitHub)',     ok: true },
-    { label: 'Hébergement',       value: 'Vercel / Supabase EU',     ok: true },
-    { label: 'Chiffrement votes', value: 'SHA-256 + Zero-knowledge', ok: true },
-    { label: 'Audit indépendant', value: 'Prévu Q3 2026',           ok: false },
-    { label: 'Certifié ANSSI',    value: 'En cours',                ok: false },
-  ]
-
   const legalDocs: Record<string, { title: string; content: React.ReactNode }> = {
     cgu: {
       title: "Conditions Générales d'Utilisation",
@@ -1464,25 +1456,10 @@ function ProfilePage({ onLogout }: { onLogout: () => void }) {
     legal: {
       title: 'Mentions légales',
       content: (
-        <div className="space-y-4 text-sm text-slate-600">
-          <div className="space-y-2">
-            <p><span className="font-semibold text-slate-700">Éditeur :</span> Association CHOISISSONS (en cours de création)</p>
-            <p><span className="font-semibold text-slate-700">Hébergement :</span> Vercel Inc. / Supabase (West EU Paris)</p>
-            <p><span className="font-semibold text-slate-700">Directeur de publication :</span> Benjamin Colleu</p>
-          </div>
-          <div className="border-t border-slate-100 pt-4">
-            <p className="font-semibold text-slate-700 mb-2">Transparence du système</p>
-            <div className="space-y-1">
-              {transparencyRows.map(item => (
-                <div key={item.label} className="flex justify-between items-center py-1 border-b border-slate-50 last:border-0">
-                  <span className="text-slate-500">{item.label}</span>
-                  <span className={`font-medium text-xs ${item.ok ? 'text-green-600' : 'text-amber-500'}`}>
-                    {item.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="space-y-2 text-sm text-slate-600">
+          <p><span className="font-semibold text-slate-700">Éditeur :</span> Association CHOISISSONS (en cours de création)</p>
+          <p><span className="font-semibold text-slate-700">Hébergement :</span> Vercel Inc. / Supabase (West EU Paris)</p>
+          <p><span className="font-semibold text-slate-700">Directeur de publication :</span> Benjamin Colleu</p>
         </div>
       ),
     },
