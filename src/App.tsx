@@ -180,6 +180,25 @@ const MOCK_USER: MockUser = {
 }
 
 // ── Utilities ──────────────────────────────────────────────────
+
+/** Retourne l'UUID persistant du votant, en le créant si absent. */
+function getOrCreateVoterId(): string {
+  const KEY = 'civis_voter_id'
+  const existing = localStorage.getItem(KEY)
+  if (existing) return existing
+  const id = crypto.randomUUID()
+  localStorage.setItem(KEY, id)
+  return id
+}
+
+/** Hache un UUID en SHA-256 — seul ce hash est envoyé à Supabase. */
+async function hashUserId(uuid: string): Promise<string> {
+  const encoded = new TextEncoder().encode(uuid)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 async function generateVoteHash(proposalId: string, choice: VoteChoice, userId: string): Promise<string> {
   const data = `${proposalId}-${choice}-${userId}-${Date.now()}`
   const encoded = new TextEncoder().encode(data)
@@ -518,7 +537,8 @@ function VotingBooth({ proposal, onVoted, onClose }: {
   const handleConfirm = async () => {
     if (!selected) return
     setLoading(true)
-    const voteHash = await generateVoteHash(proposal.id, selected, MOCK_USER.name)
+    const voterId = getOrCreateVoterId()
+    const voteHash = await generateVoteHash(proposal.id, selected, voterId)
     setHash(voteHash)
     setVoted(true)
     setLoading(false)
@@ -849,7 +869,7 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
 }
 
 // ── Home Page ──────────────────────────────────────────────────
-function HomePage({ initialCategory }: { initialCategory?: string }) {
+function HomePage({ initialCategory, userHash }: { initialCategory?: string; userHash: string }) {
   // ── Tab state ──────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'lois' | 'propositions'>(
     initialCategory ? 'propositions' : 'lois'
@@ -914,7 +934,6 @@ function HomePage({ initialCategory }: { initialCategory?: string }) {
     const choiceMap: Record<VoteChoice, string> = {
       pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
-    const userHash = MOCK_USER.name + '-hash'
     try {
       const { error } = await supabase.rpc('cast_vote', {
         p_proposal_id: proposalId,
@@ -1154,7 +1173,7 @@ const MOCK_ORGANISATIONS: Organisation[] = [
   { id: 'org-7', name: 'Mediapart', type: 'media', description: 'Journal d\'investigation en ligne' },
 ]
 
-function ExplorePage({ onSelectCategory }: { onSelectCategory: (cat: string) => void }) {
+function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: string) => void; userHash: string }) {
   const [exploreTab, setExploreTab] = useState<'discover' | 'organisations'>('discover')
 
   // Discover tab state
@@ -1223,7 +1242,7 @@ function ExplorePage({ onSelectCategory }: { onSelectCategory: (cat: string) => 
       try {
         const [orgsRes, followsRes] = await Promise.all([
           supabase.from('organisations').select('id,name,type,description,population').eq('type', orgSubTab),
-          supabase.from('citizen_organisations').select('organisation_id').eq('user_hash', MOCK_USER.name + '-hash'),
+          supabase.from('citizen_organisations').select('organisation_id').eq('user_hash', userHash),
         ])
         if (orgsRes.error) throw orgsRes.error
         if (!cancelled) {
@@ -1254,7 +1273,7 @@ function ExplorePage({ onSelectCategory }: { onSelectCategory: (cat: string) => 
     })
     try {
       const { error } = await supabase.from('citizen_organisations').insert({
-        user_hash: MOCK_USER.name + '-hash',
+        user_hash: userHash,
         organisation_id: orgId,
       })
       if (error) throw error
@@ -1490,10 +1509,11 @@ interface MyProposalRecord {
   stage: Stage
 }
 
-function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg }: {
+function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
   onLogout: () => void
   onNavigateElu: (commune: Organisation) => void
   onNavigateOrg: (org: Organisation) => void
+  userHash: string
 }) {
   const [showSettings, setShowSettings]   = useState(false)
   const [showLegal, setShowLegal]         = useState<string | null>(null)
@@ -1513,7 +1533,6 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg }: {
   const [joinedCommunes, setJoinedCommunes]     = useState<Organisation[]>([])
   const [joinedOrgs, setJoinedOrgs]             = useState<Organisation[]>([])
 
-  const userHash = MOCK_USER.name + '-hash'
 
   // Fetch "Mes votes" from Supabase
   useEffect(() => {
@@ -3093,6 +3112,12 @@ export default function App() {
   const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
   const [selectedCommune, setSelectedCommune] = useState<Organisation | null>(null)
   const [selectedOrg, setSelectedOrg]         = useState<Organisation | null>(null)
+  const [userHash, setUserHash]               = useState<string>('')
+
+  useEffect(() => {
+    const voterId = getOrCreateVoterId()
+    hashUserId(voterId).then(setUserHash)
+  }, [])
 
   const handleSelectCategory = (cat: string) => {
     setPendingCategory(cat)
@@ -3147,13 +3172,14 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto relative">
       {/* Scrollable content area */}
       <main className="flex-1 overflow-y-auto pb-24">
-        {activePage === 'home'    && <HomePage initialCategory={pendingCategory} />}
-        {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} />}
+        {activePage === 'home'    && <HomePage initialCategory={pendingCategory} userHash={userHash} />}
+        {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} />}
         {activePage === 'profile' && (
           <ProfilePage
             onLogout={() => { setIsLoggedIn(false); setActivePage('home') }}
             onNavigateElu={handleNavigateElu}
             onNavigateOrg={handleNavigateOrg}
+            userHash={userHash}
           />
         )}
         {activePage === 'support' && <SupportPage />}
