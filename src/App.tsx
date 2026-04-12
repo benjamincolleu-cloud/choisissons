@@ -14,7 +14,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────
 type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
-type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'elu' | 'org'
+type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'elu' | 'org' | 'admin'
 
 interface Argument {
   id: string
@@ -223,6 +223,8 @@ async function flushPendingVotes() {
     showToast(`${pending.length - remaining.length} vote(s) en attente synchronisé(s).`, 'info')
   }
 }
+
+const ADMIN_EMAILS: string[] = ['ton@email.com']
 
 const STAGE_CONFIG: Record<Stage, { label: string; color: string; icon: ElementType; description: string }> = {
   seedling: { label: 'Pépinière', color: 'bg-emerald-100 text-emerald-700', icon: Sprout, description: 'En cours de signatures' },
@@ -1782,11 +1784,13 @@ interface MyProposalRecord {
   supports?: number
 }
 
-function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
+function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, userHash, userEmail }: {
   onLogout: () => void
   onNavigateElu: (commune: Organisation) => void
   onNavigateOrg: (org: Organisation) => void
+  onNavigateAdmin: () => void
   userHash: string
+  userEmail: string
 }) {
   const [showSettings, setShowSettings]   = useState(false)
   const [showLegal, setShowLegal]         = useState<string | null>(null)
@@ -2236,6 +2240,20 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
           </a>
         </div>
       </div>
+
+      {/* Administration — visible uniquement pour les admins */}
+      {ADMIN_EMAILS.includes(userEmail) && (
+        <button
+          onClick={onNavigateAdmin}
+          className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-slate-900 text-white font-semibold text-sm active:scale-95 transition-all mb-3"
+        >
+          <div className="flex items-center gap-3">
+            <Shield size={16} className="text-slate-300" />
+            <span>Administration</span>
+          </div>
+          <ChevronRight size={16} className="text-slate-500" />
+        </button>
+      )}
 
       {/* Déconnexion */}
       <button
@@ -3392,6 +3410,280 @@ function ProposeModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+// ── Admin Dashboard ───────────────────────────────────────────
+interface AdminProposal {
+  id: string
+  title: string
+  description: string
+  status: string
+  supports: number
+  created_at: string
+}
+
+function AdminDashboard({ onBack }: { onBack: () => void }) {
+  const [proposals, setProposals]     = useState<AdminProposal[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [urneCount, setUrneCount]     = useState<number | null>(null)
+  const [registreCount, setRegistreCount] = useState<number | null>(null)
+  const [actioningId, setActioningId] = useState<string | null>(null)
+  const [activeSection, setActiveSection] = useState<'review' | 'all' | 'stats'>('review')
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchData() {
+      try {
+        const [propsRes, urneRes, registreRes] = await Promise.all([
+          supabase.from('proposals')
+            .select('id,title,description,status,supports,created_at')
+            .order('created_at', { ascending: false }),
+          supabase.from('urne_electronique').select('id', { count: 'exact', head: true }),
+          supabase.from('registre_scrutin').select('id', { count: 'exact', head: true }),
+        ])
+        if (!cancelled) {
+          if (propsRes.data) setProposals(propsRes.data as AdminProposal[])
+          if (urneRes.count !== null) setUrneCount(urneRes.count)
+          if (registreRes.count !== null) setRegistreCount(registreRes.count)
+        }
+      } catch {
+        showToast('Une erreur est survenue. Réessayez.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchData()
+    return () => { cancelled = true }
+  }, [])
+
+  async function handleStatusChange(id: string, newStatus: string) {
+    setActioningId(id)
+    try {
+      const { error } = await supabase.from('proposals').update({ status: newStatus }).eq('id', id)
+      if (error) throw error
+      setProposals(prev => prev.map(p => p.id === id ? { ...p, status: newStatus } : p))
+    } catch {
+      showToast('Une erreur est survenue. Réessayez.')
+    }
+    setActioningId(null)
+  }
+
+  async function handleDelete(id: string) {
+    setActioningId(id)
+    try {
+      const { error } = await supabase.from('proposals').delete().eq('id', id)
+      if (error) throw error
+      setProposals(prev => prev.filter(p => p.id !== id))
+    } catch {
+      showToast('Une erreur est survenue. Réessayez.')
+    }
+    setActioningId(null)
+  }
+
+  const reviewProposals = proposals.filter(p => p.status === 'review')
+
+  const statusCounts = proposals.reduce<Record<string, number>>((acc, p) => {
+    acc[p.status] = (acc[p.status] ?? 0) + 1
+    return acc
+  }, {})
+
+  const statusLabel: Record<string, { text: string; color: string }> = {
+    seedling: { text: 'Pépinière', color: 'bg-emerald-100 text-emerald-700' },
+    review:   { text: 'En examen', color: 'bg-amber-100 text-amber-700' },
+    voting:   { text: 'Vote',      color: 'bg-indigo-100 text-indigo-700' },
+    adopted:  { text: 'Adoptée',   color: 'bg-green-100 text-green-700' },
+    rejected: { text: 'Rejetée',   color: 'bg-red-100 text-red-600' },
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div className="bg-slate-900 px-5 pt-10 pb-6 text-white">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-slate-400 text-xs font-medium mb-5 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={14} />
+          Retour à Mon Compte
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center">
+            <Shield size={20} className="text-slate-300" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black">Administration</h1>
+            <p className="text-slate-400 text-xs">Accès restreint</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Section tabs */}
+      <div className="flex gap-1 bg-slate-200 mx-4 mt-4 rounded-xl p-1">
+        {([
+          { key: 'review' as const, label: `En attente (${reviewProposals.length})` },
+          { key: 'all'    as const, label: 'Toutes' },
+          { key: 'stats'  as const, label: 'Stats' },
+        ]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveSection(tab.key)}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeSection === tab.key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-4">
+        {/* Section 1 — Propositions en attente de validation */}
+        {activeSection === 'review' && (
+          loading ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="bg-white rounded-2xl p-4 border border-slate-100 animate-pulse">
+                  <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
+                  <div className="h-3 bg-slate-100 rounded w-full" />
+                </div>
+              ))}
+            </div>
+          ) : reviewProposals.length === 0 ? (
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 text-center">
+              <CheckCircle size={32} className="text-green-400 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">Aucune proposition en attente de validation.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {reviewProposals.map(p => (
+                <div key={p.id} className="bg-white rounded-2xl border border-amber-200 p-4">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h3 className="text-sm font-bold text-slate-800 flex-1 leading-snug">{p.title}</h3>
+                    <span className="text-xs text-slate-400 flex-shrink-0">{p.created_at?.slice(0, 10)}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed mb-2 line-clamp-3">{p.description}</p>
+                  <p className="text-xs text-emerald-600 font-medium mb-3">🌱 {p.supports ?? 0} soutiens</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleStatusChange(p.id, 'voting')}
+                      disabled={actioningId === p.id}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-green-500 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {actioningId === p.id
+                        ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                        : <><CheckCircle size={13} /> Valider</>}
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(p.id, 'rejected')}
+                      disabled={actioningId === p.id}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-red-500 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {actioningId === p.id
+                        ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                        : <><XCircle size={13} /> Rejeter</>}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Section 2 — Toutes les propositions */}
+        {activeSection === 'all' && (
+          loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-xl p-3 border border-slate-100 animate-pulse">
+                  <div className="h-3 bg-slate-100 rounded w-2/3" />
+                </div>
+              ))}
+            </div>
+          ) : proposals.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">Aucune proposition</p>
+          ) : (
+            <div className="space-y-2">
+              {proposals.map(p => {
+                const s = statusLabel[p.status] ?? { text: p.status, color: 'bg-slate-100 text-slate-600' }
+                return (
+                  <div key={p.id} className="bg-white rounded-xl border border-slate-100 px-3 py-2.5 flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-700 truncate">{p.title}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{p.created_at?.slice(0, 10)}</p>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${s.color}`}>
+                      {s.text}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      disabled={actioningId === p.id}
+                      className="flex-shrink-0 w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-400 hover:bg-red-100 active:scale-95 transition-all disabled:opacity-40"
+                      title="Supprimer"
+                    >
+                      {actioningId === p.id
+                        ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                        : <Trash2 size={13} />}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        )}
+
+        {/* Section 3 — Statistiques */}
+        {activeSection === 'stats' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-100 p-4">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Propositions par statut</h3>
+              {loading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map(i => <div key={i} className="h-8 bg-slate-50 rounded-xl animate-pulse" />)}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {Object.entries(statusLabel).map(([key, { text, color }]) => (
+                    <div key={key} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${color}`}>{text}</span>
+                      <span className="text-lg font-black text-slate-800">{statusCounts[key] ?? 0}</span>
+                    </div>
+                  ))}
+                  <div className="pt-2 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700">Total</span>
+                    <span className="text-lg font-black text-slate-800">{proposals.length}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-100 p-4">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Activité de vote</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 border-b border-slate-50">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Bulletins déposés</p>
+                    <p className="text-xs text-slate-400">urne_electronique</p>
+                  </div>
+                  <span className="text-2xl font-black text-slate-800">
+                    {urneCount === null ? '—' : urneCount.toLocaleString('fr-FR')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Votants uniques</p>
+                    <p className="text-xs text-slate-400">registre_scrutin</p>
+                  </div>
+                  <span className="text-2xl font-black text-slate-800">
+                    {registreCount === null ? '—' : registreCount.toLocaleString('fr-FR')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main App ───────────────────────────────────────────────────
 export default function App() {
   const [isLoggedIn, setIsLoggedIn]         = useState(false)
@@ -3401,6 +3693,7 @@ export default function App() {
   const [selectedCommune, setSelectedCommune] = useState<Organisation | null>(null)
   const [selectedOrg, setSelectedOrg]         = useState<Organisation | null>(null)
   const [userHash, setUserHash]               = useState<string>('')
+  const [userEmail, setUserEmail]             = useState<string>('')
   const [toasts, setToasts]                   = useState<ToastEntry[]>([])
 
   useEffect(() => {
@@ -3414,6 +3707,7 @@ export default function App() {
         // TODO Phase 2: FranceConnect — remplacer session.user.id par l'identifiant FranceConnect vérifié
         const hash = await getSupabaseIdentity(session.user.id)
         setUserHash(hash)
+        setUserEmail(session.user.email ?? '')
         setIsLoggedIn(true)
         flushPendingVotes()
       } else {
@@ -3482,6 +3776,17 @@ export default function App() {
     )
   }
 
+  if (activePage === 'admin' && ADMIN_EMAILS.includes(userEmail)) {
+    return (
+      <>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
+          <AdminDashboard onBack={() => setActivePage('profile')} />
+        </div>
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto relative">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
@@ -3495,7 +3800,9 @@ export default function App() {
             onLogout={() => { void supabase.auth.signOut(); setActivePage('home') }}
             onNavigateElu={handleNavigateElu}
             onNavigateOrg={handleNavigateOrg}
+            onNavigateAdmin={() => setActivePage('admin')}
             userHash={userHash}
+            userEmail={userEmail}
           />
         )}
         {activePage === 'support' && <SupportPage />}
