@@ -191,7 +191,7 @@ function showToast(message: string, type: 'error' | 'warning' | 'info' = 'error'
 }
 
 // ── Pending votes ──────────────────────────────────────────────
-interface PendingVote { proposalId: string; userHash: string; choice: string }
+interface PendingVote { proposalId: string; userHash: string; choice: string; timestamp?: number }
 function loadPendingVotes(): PendingVote[] {
   try { const raw = localStorage.getItem('pending_votes'); return raw ? (JSON.parse(raw) as PendingVote[]) : [] }
   catch { return [] }
@@ -1113,7 +1113,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
           setProposals((data as ProposalRow[]).map(mapRowToProposal))
         }
       } catch {
-        showToast('Connexion impossible. Réessayez dans quelques instants.')
+        showToast('Impossible de charger les propositions. Vérifiez votre connexion.')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -1151,7 +1151,11 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     })
 
     if (error) {
-      showToast('Connexion impossible.', 'error')
+      const pending = loadPendingVotes()
+      if (!pending.some(v => v.proposalId === proposalId)) {
+        savePendingVotes([...pending, { proposalId, userHash, choice: choiceMap[choice], timestamp: Date.now() }])
+      }
+      showToast('Vote sauvegardé localement. Il sera envoyé à la prochaine connexion.', 'warning')
     } else if ((data as { error?: string } | null)?.error === 'already_voted') {
       showToast('Vous avez déjà voté.', 'warning')
     } else {
@@ -1481,7 +1485,7 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
       } catch {
         if (!cancelled) {
           setOrganisations(MOCK_ORGANISATIONS.filter(o => o.type === orgSubTab))
-          showToast('Connexion impossible. Réessayez dans quelques instants.')
+          showToast('Une erreur est survenue. Réessayez.')
         }
       } finally {
         if (!cancelled) setLoadingOrgs(false)
@@ -1504,7 +1508,7 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
       })
       if (error) throw error
     } catch {
-      showToast('Connexion impossible. Réessayez dans quelques instants.')
+      showToast('Une erreur est survenue. Réessayez.')
     }
   }
 
@@ -1895,7 +1899,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
       })
       if (error) throw error
     } catch {
-      showToast('Connexion impossible. Réessayez dans quelques instants.')
+      showToast('Une erreur est survenue. Réessayez.')
     }
   }
 
@@ -2358,7 +2362,7 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
       } catch {
         if (!cancelled) {
           setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
-          showToast('Connexion impossible. Réessayez dans quelques instants.')
+          showToast('Une erreur est survenue. Réessayez.')
         }
       } finally {
         if (!cancelled) setLoadingStats(false)
@@ -2406,7 +2410,7 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
       })
       if (error) throw error
     } catch {
-      showToast('Connexion impossible. Réessayez dans quelques instants.')
+      showToast('Une erreur est survenue. Réessayez.')
     }
     setSubmittingProp(false)
   }
@@ -2431,7 +2435,7 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
       })
       if (error) throw error
     } catch {
-      showToast('Connexion impossible. Réessayez dans quelques instants.')
+      showToast('Une erreur est survenue. Réessayez.')
     }
     setSubmittingComment(false)
   }
@@ -2745,7 +2749,7 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
       } catch {
         if (!cancelled) {
           setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
-          showToast('Connexion impossible. Réessayez dans quelques instants.')
+          showToast('Une erreur est survenue. Réessayez.')
         }
       } finally {
         if (!cancelled) setLoadingStats(false)
@@ -2790,7 +2794,7 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
       })
       if (error) throw error
     } catch {
-      showToast('Connexion impossible. Réessayez dans quelques instants.')
+      showToast('Une erreur est survenue. Réessayez.')
     }
     setSubmitting(false)
   }
