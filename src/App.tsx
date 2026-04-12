@@ -899,7 +899,7 @@ function HomePage({ initialCategory }: { initialCategory?: string }) {
     return stageOk && categoryOk
   })
 
-  const handleVoted = useCallback((proposalId: string, choice: VoteChoice, proofHash: string) => {
+  const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, proofHash: string) => {
     setVotedIds(prev => new Set([...prev, proposalId]))
     setProposals(prev =>
       prev.map(p =>
@@ -911,24 +911,19 @@ function HomePage({ initialCategory }: { initialCategory?: string }) {
     setVotingProposal(null)
     setAgoraProposal(null)
 
-    const colMap: Record<VoteChoice, 'votes_pour' | 'votes_contre' | 'votes_blanc'> = {
-      pour: 'votes_pour', contre: 'votes_contre', blanc: 'votes_blanc',
+    const choiceMap: Record<VoteChoice, string> = {
+      pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
     const userHash = MOCK_USER.name + '-hash'
-    Promise.all([
-      supabase.from('votes').insert({
-        proposal_id: proposalId,
-        user_hash: userHash,
-        vote_choice: choice,
-        proof_hash: proofHash,
-      }),
-      supabase.from('proposals').select(colMap[choice]).eq('id', proposalId).single()
-        .then(({ data }) => {
-          if (!data) return
-          const current = (data as Record<string, number>)[colMap[choice]] ?? 0
-          return supabase.from('proposals').update({ [colMap[choice]]: current + 1 }).eq('id', proposalId)
-        }),
-    ]).catch(() => { /* silently ignore — local state is source of truth */ })
+    try {
+      const { error } = await supabase.rpc('cast_vote', {
+        p_proposal_id: proposalId,
+        p_user_hash: userHash,
+        p_choice: choiceMap[choice],
+        p_proof_hash: proofHash,
+      })
+      if (error) console.error('cast_vote:', error.message)
+    } catch { /* local state is source of truth */ }
   }, [])
 
   const handleLawVoted = useCallback((lawId: string, choice: VoteChoice) => {
