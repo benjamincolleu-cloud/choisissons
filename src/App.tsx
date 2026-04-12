@@ -216,7 +216,7 @@ function showToast(message: string, type: 'error' | 'info' = 'error') {
 }
 
 // ── Pending votes ──────────────────────────────────────────────
-interface PendingVote { proposalId: string; userHash: string; choice: string; proofHash: string }
+interface PendingVote { proposalId: string; userHash: string; choice: string; proofHash: string; timestamp: number }
 function loadPendingVotes(): PendingVote[] {
   try { const raw = localStorage.getItem('pending_votes'); return raw ? (JSON.parse(raw) as PendingVote[]) : [] }
   catch { return [] }
@@ -230,13 +230,19 @@ async function flushPendingVotes() {
   const remaining: PendingVote[] = []
   for (const v of pending) {
     try {
-      const { error } = await supabase.rpc('cast_vote', {
+      const { data, error } = await supabase.rpc('cast_vote', {
         p_proposal_id: v.proposalId,
         p_user_hash: v.userHash,
         p_choice: v.choice,
         p_proof_hash: v.proofHash,
+        p_timestamp: v.timestamp,
       })
-      if (error) remaining.push(v)
+      // already_voted means the vote was already recorded — don't retry
+      if (error || (data as { error?: string } | null)?.error === 'already_voted') {
+        // drop silently
+      } else if (data && (data as { error?: string }).error) {
+        remaining.push(v)
+      }
     } catch { remaining.push(v) }
   }
   savePendingVotes(remaining)
@@ -1164,17 +1170,22 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     const choiceMap: Record<VoteChoice, string> = {
       pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
+    const voteTimestamp = Date.now()
     try {
-      const { error } = await supabase.rpc('cast_vote', {
+      const { data, error } = await supabase.rpc('cast_vote', {
         p_proposal_id: proposalId,
         p_user_hash: userHash,
         p_choice: choiceMap[choice],
         p_proof_hash: proofHash,
+        p_timestamp: voteTimestamp,
       })
       if (error) throw error
+      if ((data as { error?: string } | null)?.error === 'already_voted') {
+        showToast('Vous avez déjà voté pour cette proposition.', 'info')
+      }
     } catch {
       const pending = loadPendingVotes()
-      pending.push({ proposalId, userHash, choice: choiceMap[choice], proofHash })
+      pending.push({ proposalId, userHash, choice: choiceMap[choice], proofHash, timestamp: voteTimestamp })
       savePendingVotes(pending)
       showToast('Vote sauvegardé localement. Il sera envoyé à la prochaine connexion.', 'info')
     }
