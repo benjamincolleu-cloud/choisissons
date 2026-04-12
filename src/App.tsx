@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { ElementType } from 'react'
 import { supabase } from './supabaseClient'
+import { getVoterHash, generateVoteProof } from './lib/identity'
 import {
   Home, Compass, User, Heart, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
@@ -180,32 +181,6 @@ const MOCK_USER: MockUser = {
 }
 
 // ── Utilities ──────────────────────────────────────────────────
-
-/** Retourne l'UUID persistant du votant, en le créant si absent. */
-function getOrCreateVoterId(): string {
-  const KEY = 'civis_voter_id'
-  const existing = localStorage.getItem(KEY)
-  if (existing) return existing
-  const id = crypto.randomUUID()
-  localStorage.setItem(KEY, id)
-  return id
-}
-
-/** Hache un UUID en SHA-256 — seul ce hash est envoyé à Supabase. */
-async function hashUserId(uuid: string): Promise<string> {
-  const encoded = new TextEncoder().encode(uuid)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-async function generateVoteHash(proposalId: string, choice: VoteChoice, userId: string): Promise<string> {
-  const data = `${proposalId}-${choice}-${userId}-${Date.now()}`
-  const encoded = new TextEncoder().encode(data)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-}
 
 // ── Toast system ───────────────────────────────────────────────
 interface ToastEntry { id: number; message: string; type: 'error' | 'info' }
@@ -612,8 +587,7 @@ function VotingBooth({ proposal, onVoted, onClose }: {
   const handleConfirm = async () => {
     if (!selected) return
     setLoading(true)
-    const voterId = getOrCreateVoterId()
-    const voteHash = await generateVoteHash(proposal.id, selected, voterId)
+    const voteHash = await generateVoteProof(proposal.id, selected)
     setHash(voteHash)
     setVoted(true)
     setLoading(false)
@@ -1760,6 +1734,7 @@ interface VoteRecord {
   proposalId: string
   title: string
   date: string
+  // choice n'est plus disponible : votes anonymes par conception (has_voted ne stocke pas le choix)
 }
 
 interface MyProposalRecord {
@@ -1793,37 +1768,20 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
   const [joinedOrgs, setJoinedOrgs]             = useState<Organisation[]>([])
 
 
-  // Fetch "Mes votes" from Supabase
+  // Fetch "Mes votes" via RPC get_my_votes
+  // (lecture directe de votes interdite par RLS — les totaux viennent de proposals)
   useEffect(() => {
     let cancelled = false
     async function fetchVotes() {
       try {
-        const { data: voteRows, error } = await supabase
-          .from('votes')
-          .select('proposal_id, vote_choice, created_at')
-          .eq('user_hash', userHash)
-          .order('created_at', { ascending: false })
+        const { data, error } = await supabase.rpc('get_my_votes', { p_user_hash: userHash })
         if (error) throw error
-        if (!voteRows || voteRows.length === 0) return
-
-        const ids = voteRows.map((v: { proposal_id: string }) => v.proposal_id)
-        const { data: propRows } = await supabase
-          .from('proposals')
-          .select('id, title')
-          .in('id', ids)
-
-        const titleMap: Record<string, string> = {}
-        for (const p of (propRows ?? []) as { id: string; title: string }[]) {
-          titleMap[p.id] = p.title
-        }
-
-        if (!cancelled) {
+        if (!cancelled && data && (data as unknown[]).length > 0) {
           setVotedProposals(
-            voteRows.map((v: { proposal_id: string; vote_choice: string; created_at: string }) => ({
-              proposalId: v.proposal_id,
-              choice: v.vote_choice as VoteChoice,
-              title: titleMap[v.proposal_id] ?? 'Proposition inconnue',
-              date: v.created_at?.slice(0, 10) ?? '',
+            (data as { proposal_id: string; title: string; voted_at: string }[]).map(row => ({
+              proposalId: String(row.proposal_id),
+              title: row.title ?? 'Proposition inconnue',
+              date: row.voted_at?.slice(0, 10) ?? '',
             }))
           )
         }
@@ -2153,8 +2111,8 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
                   <p className="text-sm text-slate-700 font-medium truncate">{v.title}</p>
                   <p className="text-xs text-slate-400 mt-0.5">{v.date}</p>
                 </div>
-                <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${choiceColor[v.choice]}`}>
-                  {choiceLabel[v.choice]}
+                <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
+                  Voté
                 </span>
               </div>
             ))}
@@ -3395,8 +3353,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const voterId = getOrCreateVoterId()
-    hashUserId(voterId).then(hash => {
+    getVoterHash().then(hash => {
       setUserHash(hash)
       flushPendingVotes()
     })
