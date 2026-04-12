@@ -3341,6 +3341,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    // TODO Phase 2: FranceConnect — remplacer getVoterHash() par l'identifiant vérifié FranceConnect
     getVoterHash().then(hash => {
       setUserHash(hash)
       flushPendingVotes()
