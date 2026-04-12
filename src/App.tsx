@@ -207,6 +207,44 @@ async function generateVoteHash(proposalId: string, choice: VoteChoice, userId: 
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+// ── Toast system ───────────────────────────────────────────────
+interface ToastEntry { id: number; message: string; type: 'error' | 'info' }
+let _toastHandler: ((entry: ToastEntry) => void) | null = null
+let _toastCounter = 0
+function showToast(message: string, type: 'error' | 'info' = 'error') {
+  _toastHandler?.({ id: ++_toastCounter, message, type })
+}
+
+// ── Pending votes ──────────────────────────────────────────────
+interface PendingVote { proposalId: string; userHash: string; choice: string; proofHash: string }
+function loadPendingVotes(): PendingVote[] {
+  try { const raw = localStorage.getItem('pending_votes'); return raw ? (JSON.parse(raw) as PendingVote[]) : [] }
+  catch { return [] }
+}
+function savePendingVotes(votes: PendingVote[]) {
+  localStorage.setItem('pending_votes', JSON.stringify(votes))
+}
+async function flushPendingVotes() {
+  const pending = loadPendingVotes()
+  if (pending.length === 0) return
+  const remaining: PendingVote[] = []
+  for (const v of pending) {
+    try {
+      const { error } = await supabase.rpc('cast_vote', {
+        p_proposal_id: v.proposalId,
+        p_user_hash: v.userHash,
+        p_choice: v.choice,
+        p_proof_hash: v.proofHash,
+      })
+      if (error) remaining.push(v)
+    } catch { remaining.push(v) }
+  }
+  savePendingVotes(remaining)
+  if (remaining.length < pending.length) {
+    showToast(`${pending.length - remaining.length} vote(s) en attente synchronisé(s).`, 'info')
+  }
+}
+
 const STAGE_CONFIG: Record<Stage, { label: string; color: string; icon: ElementType; description: string }> = {
   seedling: { label: 'Pépinière', color: 'bg-emerald-100 text-emerald-700', icon: Sprout, description: 'En cours de signatures' },
   review:   { label: 'Jury citoyen', color: 'bg-amber-100 text-amber-700', icon: Users, description: 'Examinée par le jury' },
@@ -244,6 +282,37 @@ function VoteBar({ votes }: { votes: { pour: number; contre: number; blanc: numb
         <span className="text-slate-400">{blancPct}% Blanc</span>
         <span className="text-red-500 font-medium">{contrePct}% Contre</span>
       </div>
+    </div>
+  )
+}
+
+// ── Toast Container ────────────────────────────────────────────
+function ToastItem({ entry, onDone }: { entry: ToastEntry; onDone: (id: number) => void }) {
+  useEffect(() => {
+    const t = setTimeout(() => onDone(entry.id), 4000)
+    return () => clearTimeout(t)
+  }, [entry.id, onDone])
+  const base = 'flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg pointer-events-auto'
+  const colors = entry.type === 'error'
+    ? 'bg-red-600 text-white'
+    : 'bg-slate-800 text-white'
+  const Icon = entry.type === 'error' ? XCircle : CheckCircle
+  return (
+    <div className={`${base} ${colors}`}>
+      <Icon size={18} className="flex-shrink-0 mt-0.5" />
+      <p className="text-sm leading-snug flex-1">{entry.message}</p>
+      <button onClick={() => onDone(entry.id)} className="opacity-70 hover:opacity-100 flex-shrink-0">
+        <X size={16} />
+      </button>
+    </div>
+  )
+}
+
+function ToastContainer({ toasts, onDismiss }: { toasts: ToastEntry[]; onDismiss: (id: number) => void }) {
+  if (toasts.length === 0) return null
+  return (
+    <div className="fixed top-4 left-0 right-0 max-w-md mx-auto px-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      {toasts.map(t => <ToastItem key={t.id} entry={t} onDone={onDismiss} />)}
     </div>
   )
 }
@@ -1065,7 +1134,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
           setProposals((data as ProposalRow[]).map(mapRowToProposal))
         }
       } catch {
-        // Supabase unreachable — keep the mock fallback already in state
+        showToast('Connexion impossible. Réessayez dans quelques instants.')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -1102,8 +1171,13 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
         p_choice: choiceMap[choice],
         p_proof_hash: proofHash,
       })
-      if (error) console.error('cast_vote:', error.message)
-    } catch { /* local state is source of truth */ }
+      if (error) throw error
+    } catch {
+      const pending = loadPendingVotes()
+      pending.push({ proposalId, userHash, choice: choiceMap[choice], proofHash })
+      savePendingVotes(pending)
+      showToast('Vote sauvegardé localement. Il sera envoyé à la prochaine connexion.', 'info')
+    }
     setResultsProposalId(proposalId)
   }, [])
 
@@ -1427,7 +1501,10 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
           }
         }
       } catch {
-        if (!cancelled) setOrganisations(MOCK_ORGANISATIONS.filter(o => o.type === orgSubTab))
+        if (!cancelled) {
+          setOrganisations(MOCK_ORGANISATIONS.filter(o => o.type === orgSubTab))
+          showToast('Connexion impossible. Réessayez dans quelques instants.')
+        }
       } finally {
         if (!cancelled) setLoadingOrgs(false)
       }
@@ -1448,7 +1525,9 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
         organisation_id: orgId,
       })
       if (error) throw error
-    } catch { /* local state is source of truth */ }
+    } catch {
+      showToast('Connexion impossible. Réessayez dans quelques instants.')
+    }
   }
 
   // Real-time search filter
@@ -1851,7 +1930,9 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
         organisation_id: orgId,
       })
       if (error) throw error
-    } catch { /* local state is source of truth */ }
+    } catch {
+      showToast('Connexion impossible. Réessayez dans quelques instants.')
+    }
   }
 
   const choiceLabel: Record<VoteChoice, string> = {
@@ -2320,7 +2401,10 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
           }
         }
       } catch {
-        if (!cancelled) setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
+        if (!cancelled) {
+          setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
+          showToast('Connexion impossible. Réessayez dans quelques instants.')
+        }
       } finally {
         if (!cancelled) setLoadingStats(false)
       }
@@ -2366,7 +2450,9 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
         tags: [],
       })
       if (error) throw error
-    } catch { /* local state is source of truth */ }
+    } catch {
+      showToast('Connexion impossible. Réessayez dans quelques instants.')
+    }
     setSubmittingProp(false)
   }
 
@@ -2389,7 +2475,9 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
         content: commentText,
       })
       if (error) throw error
-    } catch { /* local state is source of truth */ }
+    } catch {
+      showToast('Connexion impossible. Réessayez dans quelques instants.')
+    }
     setSubmittingComment(false)
   }
 
@@ -2700,7 +2788,10 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
           if (consultRes.data) setConsultations(consultRes.data as LocalConsultation[])
         }
       } catch {
-        if (!cancelled) setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
+        if (!cancelled) {
+          setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
+          showToast('Connexion impossible. Réessayez dans quelques instants.')
+        }
       } finally {
         if (!cancelled) setLoadingStats(false)
       }
@@ -2743,7 +2834,9 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
         tags: [],
       })
       if (error) throw error
-    } catch { /* local state is source of truth */ }
+    } catch {
+      showToast('Connexion impossible. Réessayez dans quelques instants.')
+    }
     setSubmitting(false)
   }
 
@@ -3285,10 +3378,23 @@ export default function App() {
   const [selectedCommune, setSelectedCommune] = useState<Organisation | null>(null)
   const [selectedOrg, setSelectedOrg]         = useState<Organisation | null>(null)
   const [userHash, setUserHash]               = useState<string>('')
+  const [toasts, setToasts]                   = useState<ToastEntry[]>([])
+
+  useEffect(() => {
+    _toastHandler = (entry) => setToasts(prev => [...prev, entry])
+    return () => { _toastHandler = null }
+  }, [])
 
   useEffect(() => {
     const voterId = getOrCreateVoterId()
-    hashUserId(voterId).then(setUserHash)
+    hashUserId(voterId).then(hash => {
+      setUserHash(hash)
+      flushPendingVotes()
+    })
+  }, [])
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
   const handleSelectCategory = (cat: string) => {
@@ -3320,28 +3426,36 @@ export default function App() {
   // Full-screen dashboards — no nav bar
   if (activePage === 'elu' && selectedCommune) {
     return (
-      <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
-        <ElectedDashboard
-          commune={selectedCommune}
-          onBack={() => setActivePage('profile')}
-        />
-      </div>
+      <>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
+          <ElectedDashboard
+            commune={selectedCommune}
+            onBack={() => setActivePage('profile')}
+          />
+        </div>
+      </>
     )
   }
 
   if (activePage === 'org' && selectedOrg) {
     return (
-      <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
-        <OrgDashboard
-          org={selectedOrg}
-          onBack={() => setActivePage('profile')}
-        />
-      </div>
+      <>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
+          <OrgDashboard
+            org={selectedOrg}
+            onBack={() => setActivePage('profile')}
+          />
+        </div>
+      </>
     )
   }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto relative">
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
       {/* Scrollable content area */}
       <main className="flex-1 overflow-y-auto pb-24">
         {activePage === 'home'    && <HomePage initialCategory={pendingCategory} userHash={userHash} />}
