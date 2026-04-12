@@ -1757,9 +1757,11 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
 }
 
 // ── Account Page ───────────────────────────────────────────────
+// Note: avec l'architecture anonymat réel, le choix n'est plus
+// stocké côté serveur avec le user_hash — on affiche seulement
+// les propositions sur lesquelles l'utilisateur a voté.
 interface VoteRecord {
   proposalId: string
-  choice: VoteChoice
   title: string
   date: string
 }
