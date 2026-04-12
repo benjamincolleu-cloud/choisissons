@@ -961,7 +961,7 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
             className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-amber-50 text-amber-500 border border-amber-200 cursor-not-allowed"
           >
             <Users size={15} />
-            Vote disponible après validation
+            Vote disponible après validation du Jury
           </button>
         ) : (
           <button
@@ -1779,6 +1779,7 @@ interface MyProposalRecord {
   id: string
   title: string
   stage: Stage
+  supports?: number
 }
 
 function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
@@ -1841,16 +1842,17 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
       try {
         const { data, error } = await supabase
           .from('proposals')
-          .select('id, title, status')
+          .select('id, title, status, supports')
           .eq('author_hash', userHash)
           .order('created_at', { ascending: false })
         if (error) throw error
         if (!cancelled && data) {
           setMyProposals(
-            (data as { id: string; title: string; status: string }[]).map(p => ({
+            (data as { id: string; title: string; status: string; supports?: number }[]).map(p => ({
               id: p.id,
               title: p.title,
               stage: (p.status as Stage) ?? 'seedling',
+              supports: p.supports ?? 0,
             }))
           )
         }
@@ -2164,12 +2166,37 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
           </p>
         ) : (
           <div className="space-y-2">
-            {myProposals.map(p => (
-              <div key={p.id} className="flex items-center justify-between gap-3 py-2 border-b border-slate-50 last:border-0">
-                <p className="text-sm text-slate-700 font-medium flex-1 min-w-0 truncate">{p.title}</p>
-                <StageBadge stage={p.stage} />
-              </div>
-            ))}
+            {myProposals.map(p => {
+              const stageEmoji: Record<Stage, string> = {
+                seedling: '🌱', review: '🔍', voting: '🗳️', adopted: '✅', rejected: '❌'
+              }
+              const soutiens = p.supports ?? 0
+              const pct = Math.min(100, (soutiens / 10) * 100)
+              return (
+                <div key={p.id} className="py-2 border-b border-slate-50 last:border-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-slate-700 font-medium flex-1 min-w-0 truncate">
+                      <span className="mr-1">{stageEmoji[p.stage]}</span>{p.title}
+                    </p>
+                    {p.stage !== 'seedling' && <StageBadge stage={p.stage} />}
+                  </div>
+                  {p.stage === 'seedling' && (
+                    <div className="mt-1.5">
+                      <div className="flex justify-between text-xs text-slate-400 mb-1">
+                        <span className="font-medium">{soutiens} / 10 soutiens</span>
+                        {soutiens >= 10 && <span className="text-green-600 font-semibold">Objectif atteint !</span>}
+                      </div>
+                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : 'bg-emerald-400'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
