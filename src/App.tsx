@@ -1899,15 +1899,6 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
     }
   }
 
-  const choiceLabel: Record<VoteChoice, string> = {
-    pour: 'Pour', contre: 'Contre', blanc: 'Blanc',
-  }
-  const choiceColor: Record<VoteChoice, string> = {
-    pour: 'text-green-600 bg-green-50',
-    contre: 'text-red-500 bg-red-50',
-    blanc: 'text-slate-500 bg-slate-100',
-  }
-
   const legalDocs: Record<string, { title: string; content: React.ReactNode }> = {
     cgu: {
       title: "Conditions Générales d'Utilisation",
