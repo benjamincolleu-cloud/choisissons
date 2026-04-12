@@ -13,7 +13,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────
 type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
-type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'elu'
+type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'elu' | 'org'
 
 interface Argument {
   id: string
@@ -1495,7 +1495,11 @@ interface MyProposalRecord {
   stage: Stage
 }
 
-function ProfilePage({ onLogout, onNavigateElu }: { onLogout: () => void; onNavigateElu: (commune: Organisation) => void }) {
+function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg }: {
+  onLogout: () => void
+  onNavigateElu: (commune: Organisation) => void
+  onNavigateOrg: (org: Organisation) => void
+}) {
   const [showSettings, setShowSettings]   = useState(false)
   const [showLegal, setShowLegal]         = useState<string | null>(null)
   const [notifEnabled, setNotifEnabled]   = useState(true)
@@ -1512,6 +1516,7 @@ function ProfilePage({ onLogout, onNavigateElu }: { onLogout: () => void; onNavi
   const [loadingCommune, setLoadingCommune]     = useState(false)
   const [joinedCommuneIds, setJoinedCommuneIds] = useState<Set<string>>(new Set())
   const [joinedCommunes, setJoinedCommunes]     = useState<Organisation[]>([])
+  const [joinedOrgs, setJoinedOrgs]             = useState<Organisation[]>([])
 
   const userHash = MOCK_USER.name + '-hash'
 
@@ -1602,18 +1607,17 @@ function ProfilePage({ onLogout, onNavigateElu }: { onLogout: () => void; onNavi
         if (!cancelled && data && data.length > 0) {
           const ids = data.map((r: { organisation_id: string }) => r.organisation_id)
           setJoinedCommuneIds(new Set(ids))
-          // Fetch full org objects for élu access
+          // Fetch full org objects for all types in one query, then split
           const { data: orgData } = await supabase
             .from('organisations')
             .select('id,name,type,description,population')
             .in('id', ids)
-            .eq('type', 'commune')
           if (!cancelled) {
-            if (orgData && orgData.length > 0) {
-              setJoinedCommunes(orgData as Organisation[])
-            } else {
-              setJoinedCommunes(MOCK_ORGANISATIONS.filter(o => ids.includes(o.id) && o.type === 'commune'))
-            }
+            const orgs = (orgData && orgData.length > 0)
+              ? orgData as Organisation[]
+              : MOCK_ORGANISATIONS.filter(o => ids.includes(o.id))
+            setJoinedCommunes(orgs.filter(o => o.type === 'commune'))
+            setJoinedOrgs(orgs.filter(o => o.type === 'ong' || o.type === 'media'))
           }
         }
       } catch { /* ignore */ }
@@ -1824,6 +1828,34 @@ function ProfilePage({ onLogout, onNavigateElu }: { onLogout: () => void; onNavi
         </div>
       )}
 
+      {/* Accès tableau de bord ONG / Média */}
+      {joinedOrgs.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {joinedOrgs.map(org => {
+            const bgColor = org.type === 'ong' ? '#854f0b' : '#334155'
+            const icon    = org.type === 'ong' ? <Users size={16} className="text-amber-200 flex-shrink-0" /> : <Newspaper size={16} className="text-slate-300 flex-shrink-0" />
+            const sub     = org.type === 'ong' ? 'ONG / Association' : 'Média'
+            return (
+              <button
+                key={org.id}
+                onClick={() => onNavigateOrg(org)}
+                className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-white active:scale-95 transition-all shadow-sm"
+                style={{ backgroundColor: bgColor }}
+              >
+                <div className="flex items-center gap-3">
+                  {icon}
+                  <div className="text-left">
+                    <p className="text-sm font-semibold leading-tight">Tableau de bord {sub}</p>
+                    <p className="text-xs mt-0.5 opacity-70">{org.name}</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="opacity-60 flex-shrink-0" />
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Mes votes */}
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
         <h3 className="font-bold text-slate-800 text-sm mb-3">Mes votes</h3>
@@ -2023,6 +2055,413 @@ function ProfilePage({ onLogout, onNavigateElu }: { onLogout: () => void; onNavi
                 className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm active:scale-95 transition-all"
               >
                 Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Org Dashboard ─────────────────────────────────────────────
+interface OrgProposal {
+  id: string
+  title: string
+  status: string
+  votes_pour: number
+  votes_contre: number
+  votes_blanc: number
+  created_at: string
+}
+
+interface OrgComment {
+  id: string
+  proposal_id: string
+  content: string
+  created_at: string
+}
+
+function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }) {
+  const [followerCount, setFollowerCount]   = useState<number | null>(null)
+  const [proposals, setProposals]           = useState<OrgProposal[]>([])
+  const [nationalLaws, setNationalLaws]     = useState<Proposal[]>([])
+  const [comments, setComments]             = useState<Record<string, OrgComment[]>>({})
+  const [loadingStats, setLoadingStats]     = useState(true)
+
+  const [showPropForm, setShowPropForm]     = useState(false)
+  const [propTitle, setPropTitle]           = useState('')
+  const [propDescription, setPropDescription] = useState('')
+  const [submittingProp, setSubmittingProp] = useState(false)
+
+  const [commentingLawId, setCommentingLawId] = useState<string | null>(null)
+  const [commentText, setCommentText]         = useState('')
+  const [submittingComment, setSubmittingComment] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchData() {
+      try {
+        const [followersRes, proposalsRes, lawsRes] = await Promise.all([
+          supabase.from('citizen_organisations').select('id', { count: 'exact', head: true }).eq('organisation_id', org.id),
+          supabase.from('proposals').select('id,title,status,votes_pour,votes_contre,votes_blanc,created_at').eq('author', org.name),
+          supabase.from('proposals').select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at').eq('status', 'voting'),
+        ])
+        if (!cancelled) {
+          if (followersRes.count !== null) setFollowerCount(followersRes.count)
+          if (proposalsRes.data) setProposals(proposalsRes.data as OrgProposal[])
+          if (lawsRes.data && lawsRes.data.length > 0) {
+            setNationalLaws((lawsRes.data as ProposalRow[]).map(mapRowToProposal))
+          } else {
+            setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
+          }
+          // Load existing comments by this org on any of those laws
+          const lawIds = (lawsRes.data ?? []).map((l: { id: string }) => l.id)
+          if (lawIds.length > 0) {
+            const { data: commentsData } = await supabase
+              .from('comments')
+              .select('id,proposal_id,content,created_at')
+              .eq('organisation_id', org.id)
+              .in('proposal_id', lawIds)
+            if (!cancelled && commentsData) {
+              const grouped: Record<string, OrgComment[]> = {}
+              for (const c of commentsData as OrgComment[]) {
+                if (!grouped[c.proposal_id]) grouped[c.proposal_id] = []
+                grouped[c.proposal_id].push(c)
+              }
+              setComments(grouped)
+            }
+          }
+        }
+      } catch {
+        if (!cancelled) setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
+      } finally {
+        if (!cancelled) setLoadingStats(false)
+      }
+    }
+    fetchData()
+    return () => { cancelled = true }
+  }, [org.id, org.name])
+
+  const totalVotes = proposals.reduce(
+    (sum, p) => sum + (p.votes_pour ?? 0) + (p.votes_contre ?? 0) + (p.votes_blanc ?? 0), 0
+  )
+  const engagementRate = followerCount && followerCount > 0
+    ? Math.min(Math.round((totalVotes / followerCount) * 100), 100)
+    : 0
+
+  const headerColor = org.type === 'ong' ? '#854f0b' : '#334155'
+  const accentClass = org.type === 'ong' ? 'text-amber-200' : 'text-slate-300'
+  const typeLabel   = org.type === 'ong' ? 'ONG / Association' : 'Média'
+  const typeBadge   = org.type === 'ong' ? 'bg-amber-900/50 text-amber-200' : 'bg-slate-600/50 text-slate-300'
+
+  async function handleSubmitProposal() {
+    if (!propTitle.trim()) return
+    setSubmittingProp(true)
+    const draft: OrgProposal = {
+      id: `org-prop-${Date.now()}`,
+      title: propTitle,
+      status: 'seedling',
+      votes_pour: 0, votes_contre: 0, votes_blanc: 0,
+      created_at: new Date().toISOString(),
+    }
+    setProposals(prev => [draft, ...prev])
+    setShowPropForm(false)
+    setPropTitle(''); setPropDescription('')
+    try {
+      const { error } = await supabase.from('proposals').insert({
+        title: propTitle,
+        description: propDescription,
+        status: 'seedling',
+        author: org.name,
+        category: org.type === 'ong' ? 'Social' : 'Numérique',
+        supports: 0,
+        votes_pour: 0, votes_contre: 0, votes_blanc: 0,
+        tags: [],
+      })
+      if (error) throw error
+    } catch { /* local state is source of truth */ }
+    setSubmittingProp(false)
+  }
+
+  async function handleSubmitComment(lawId: string) {
+    if (!commentText.trim()) return
+    setSubmittingComment(true)
+    const draft: OrgComment = {
+      id: `comment-${Date.now()}`,
+      proposal_id: lawId,
+      content: commentText,
+      created_at: new Date().toISOString(),
+    }
+    setComments(prev => ({ ...prev, [lawId]: [...(prev[lawId] ?? []), draft] }))
+    setCommentingLawId(null)
+    setCommentText('')
+    try {
+      const { error } = await supabase.from('comments').insert({
+        proposal_id: lawId,
+        organisation_id: org.id,
+        content: commentText,
+      })
+      if (error) throw error
+    } catch { /* local state is source of truth */ }
+    setSubmittingComment(false)
+  }
+
+  const statusTag: Record<string, { text: string; color: string }> = {
+    voting:   { text: 'En vote',   color: 'bg-indigo-100 text-indigo-700' },
+    seedling: { text: 'Pépinière', color: 'bg-emerald-100 text-emerald-700' },
+    review:   { text: 'Jury',      color: 'bg-amber-100 text-amber-700' },
+    adopted:  { text: 'Adoptée',   color: 'bg-green-100 text-green-700' },
+    rejected: { text: 'Rejetée',   color: 'bg-red-100 text-red-600' },
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div style={{ backgroundColor: headerColor }} className="px-5 pt-10 pb-6 text-white">
+        <button
+          onClick={onBack}
+          className={`flex items-center gap-1.5 ${accentClass} text-xs font-medium mb-5 hover:text-white transition-colors`}
+        >
+          <ArrowLeft size={14} />
+          Retour à Mon Compte
+        </button>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <span className={`inline-block text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full mb-2 ${typeBadge}`}>
+              {typeLabel}
+            </span>
+            <h1 className="text-xl font-black leading-tight">{org.name}</h1>
+            {org.description && (
+              <p className={`text-xs mt-1 ${accentClass} line-clamp-2`}>{org.description}</p>
+            )}
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="text-2xl font-black">{loadingStats ? '—' : (followerCount ?? 0).toLocaleString('fr-FR')}</p>
+            <p className={`text-xs ${accentClass}`}>abonnés</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stat cards */}
+      <div className="px-4 pt-4">
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          {[
+            { label: 'Abonnés',         value: loadingStats ? '—' : (followerCount ?? 0).toLocaleString('fr-FR'), sub: 'citoyens abonnés' },
+            { label: 'Propositions',    value: loadingStats ? '—' : proposals.length.toString(),                  sub: 'publiées' },
+            { label: 'Votes reçus',     value: loadingStats ? '—' : totalVotes.toLocaleString('fr-FR'),           sub: 'sur vos propositions' },
+            { label: 'Engagement',      value: loadingStats ? '—' : `${engagementRate}%`,                         sub: 'votes / abonnés' },
+          ].map(stat => (
+            <div key={stat.label} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+              <p className="text-xs text-slate-500 leading-snug mb-1">{stat.label}</p>
+              <p className="text-2xl font-black text-slate-800">{stat.value}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{stat.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Proposals */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Mes propositions</h2>
+            <button
+              onClick={() => setShowPropForm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white active:scale-95 transition-all"
+              style={{ backgroundColor: headerColor }}
+            >
+              <Plus size={12} />
+              Soumettre
+            </button>
+          </div>
+
+          {loadingStats ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="bg-white rounded-2xl p-4 border border-slate-100 animate-pulse">
+                  <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
+                  <div className="h-2 bg-slate-100 rounded w-full" />
+                </div>
+              ))}
+            </div>
+          ) : proposals.length === 0 ? (
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 text-center">
+              <p className="text-sm text-slate-400 mb-1">Aucune proposition soumise</p>
+              <p className="text-xs text-slate-300">Soumettez votre première proposition citoyenne</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {proposals.map(p => {
+                const total = (p.votes_pour ?? 0) + (p.votes_contre ?? 0) + (p.votes_blanc ?? 0)
+                const pourPct   = total > 0 ? Math.round((p.votes_pour   / total) * 100) : 0
+                const contrePct = total > 0 ? Math.round((p.votes_contre / total) * 100) : 0
+                const blancPct  = 100 - pourPct - contrePct
+                const s = statusTag[p.status] ?? { text: p.status, color: 'bg-slate-100 text-slate-600' }
+                return (
+                  <div key={p.id} className="bg-white rounded-2xl p-4 border border-slate-100">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <p className="text-sm font-semibold text-slate-800 flex-1 leading-snug">{p.title}</p>
+                      <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${s.color}`}>
+                        {s.text}
+                      </span>
+                    </div>
+                    {total > 0 ? (
+                      <>
+                        <div className="flex h-1.5 rounded-full overflow-hidden mb-1">
+                          <div className="bg-green-500 transition-all" style={{ width: `${pourPct}%` }} />
+                          <div className="bg-red-400 transition-all"   style={{ width: `${contrePct}%` }} />
+                          <div className="bg-slate-200 transition-all" style={{ width: `${blancPct}%` }} />
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-green-600 font-medium">Pour {pourPct}%</span>
+                          <span className="text-slate-400">{total.toLocaleString('fr-FR')} votes</span>
+                          <span className="text-red-500 font-medium">Contre {contrePct}%</span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-300">{p.created_at?.slice(0, 10)} · Aucun vote</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Comment on national laws */}
+        <div className="mb-8">
+          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Commenter une loi en cours</h2>
+
+          {loadingStats ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="bg-white rounded-2xl p-4 border border-slate-100 animate-pulse">
+                  <div className="h-4 bg-slate-100 rounded w-3/4" />
+                </div>
+              ))}
+            </div>
+          ) : nationalLaws.length === 0 ? (
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 text-center">
+              <p className="text-sm text-slate-400">Aucune loi en vote actuellement</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {nationalLaws.map(law => {
+                const lawComments = comments[law.id] ?? []
+                const isCommenting = commentingLawId === law.id
+                return (
+                  <div key={law.id} className="bg-white rounded-2xl p-4 border border-slate-100">
+                    <p className="text-sm font-semibold text-slate-800 mb-2 leading-snug">{law.title}</p>
+                    {lawComments.length > 0 && (
+                      <div className="space-y-2 mb-3">
+                        {lawComments.map(c => (
+                          <div key={c.id} className="bg-slate-50 rounded-xl px-3 py-2">
+                            <p className="text-xs text-slate-600 leading-relaxed">{c.content}</p>
+                            <p className="text-xs text-slate-300 mt-1">{c.created_at?.slice(0, 10)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {isCommenting ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={commentText}
+                          onChange={e => setCommentText(e.target.value.slice(0, 500))}
+                          placeholder="Votre commentaire (500 caractères max)..."
+                          rows={3}
+                          className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-slate-300 resize-none"
+                          autoFocus
+                        />
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-300">{commentText.length}/500</span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => { setCommentingLawId(null); setCommentText('') }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 bg-slate-100"
+                            >
+                              Annuler
+                            </button>
+                            <button
+                              onClick={() => handleSubmitComment(law.id)}
+                              disabled={!commentText.trim() || submittingComment}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40 flex items-center gap-1 active:scale-95 transition-all"
+                              style={{ backgroundColor: headerColor }}
+                            >
+                              {submittingComment
+                                ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                                : 'Publier'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setCommentingLawId(law.id); setCommentText('') }}
+                        className="flex items-center gap-1.5 text-xs font-semibold mt-1 transition-colors hover:opacity-70"
+                        style={{ color: headerColor }}
+                      >
+                        <Plus size={12} />
+                        Ajouter un commentaire
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Submit proposal modal */}
+      {showPropForm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end p-4">
+          <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 text-sm">Soumettre une proposition</h3>
+              <button
+                onClick={() => setShowPropForm(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
+              >
+                <X size={15} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Titre</label>
+                <input
+                  type="text"
+                  value={propTitle}
+                  onChange={e => setPropTitle(e.target.value)}
+                  placeholder="Titre de votre proposition"
+                  className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Description</label>
+                <textarea
+                  value={propDescription}
+                  onChange={e => setPropDescription(e.target.value)}
+                  placeholder="Décrivez votre proposition..."
+                  rows={4}
+                  className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-slate-300 resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-5 pb-5 flex gap-3">
+              <button
+                onClick={() => setShowPropForm(false)}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSubmitProposal}
+                disabled={!propTitle.trim() || submittingProp}
+                className="flex-1 py-3 rounded-xl text-white font-semibold text-sm disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                style={{ backgroundColor: headerColor }}
+              >
+                {submittingProp
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : 'Soumettre'}
               </button>
             </div>
           </div>
@@ -2658,6 +3097,7 @@ export default function App() {
   const [showPropose, setShowPropose]       = useState(false)
   const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
   const [selectedCommune, setSelectedCommune] = useState<Organisation | null>(null)
+  const [selectedOrg, setSelectedOrg]         = useState<Organisation | null>(null)
 
   const handleSelectCategory = (cat: string) => {
     setPendingCategory(cat)
@@ -2667,6 +3107,11 @@ export default function App() {
   const handleNavigateElu = (commune: Organisation) => {
     setSelectedCommune(commune)
     setActivePage('elu')
+  }
+
+  const handleNavigateOrg = (org: Organisation) => {
+    setSelectedOrg(org)
+    setActivePage('org')
   }
 
   const navItems: { page: NavPage; label: string; icon: ElementType }[] = [
@@ -2680,12 +3125,23 @@ export default function App() {
     return <LoginScreen onLogin={() => setIsLoggedIn(true)} />
   }
 
-  // Elected dashboard renders full-screen, no nav
+  // Full-screen dashboards — no nav bar
   if (activePage === 'elu' && selectedCommune) {
     return (
       <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
         <ElectedDashboard
           commune={selectedCommune}
+          onBack={() => setActivePage('profile')}
+        />
+      </div>
+    )
+  }
+
+  if (activePage === 'org' && selectedOrg) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
+        <OrgDashboard
+          org={selectedOrg}
           onBack={() => setActivePage('profile')}
         />
       </div>
@@ -2702,6 +3158,7 @@ export default function App() {
           <ProfilePage
             onLogout={() => { setIsLoggedIn(false); setActivePage('home') }}
             onNavigateElu={handleNavigateElu}
+            onNavigateOrg={handleNavigateOrg}
           />
         )}
         {activePage === 'support' && <SupportPage />}
