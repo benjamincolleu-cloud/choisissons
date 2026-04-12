@@ -183,15 +183,15 @@ const MOCK_USER: MockUser = {
 // ── Utilities ──────────────────────────────────────────────────
 
 // ── Toast system ───────────────────────────────────────────────
-interface ToastEntry { id: number; message: string; type: 'error' | 'info' }
+interface ToastEntry { id: number; message: string; type: 'error' | 'warning' | 'info' }
 let _toastHandler: ((entry: ToastEntry) => void) | null = null
 let _toastCounter = 0
-function showToast(message: string, type: 'error' | 'info' = 'error') {
+function showToast(message: string, type: 'error' | 'warning' | 'info' = 'error') {
   _toastHandler?.({ id: ++_toastCounter, message, type })
 }
 
 // ── Pending votes ──────────────────────────────────────────────
-interface PendingVote { proposalId: string; userHash: string; choice: string; proofHash: string; timestamp: number }
+interface PendingVote { proposalId: string; userHash: string; choice: string }
 function loadPendingVotes(): PendingVote[] {
   try { const raw = localStorage.getItem('pending_votes'); return raw ? (JSON.parse(raw) as PendingVote[]) : [] }
   catch { return [] }
@@ -205,14 +205,12 @@ async function flushPendingVotes() {
   const remaining: PendingVote[] = []
   for (const v of pending) {
     try {
-      const { data, error } = await supabase.rpc('cast_vote', {
+      const { data, error } = await supabase.rpc('deposer_bulletin', {
         p_proposal_id: v.proposalId,
         p_user_hash: v.userHash,
         p_choice: v.choice,
-        p_proof_hash: v.proofHash,
-        p_timestamp: v.timestamp,
       })
-      // already_voted means the vote was already recorded — don't retry
+      // already_voted ou succès → ne pas réessayer
       if (error || (data as { error?: string } | null)?.error === 'already_voted') {
         // drop silently
       } else if (data && (data as { error?: string }).error) {
@@ -274,10 +272,11 @@ function ToastItem({ entry, onDone }: { entry: ToastEntry; onDone: (id: number) 
     return () => clearTimeout(t)
   }, [entry.id, onDone])
   const base = 'flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg pointer-events-auto'
-  const colors = entry.type === 'error'
-    ? 'bg-red-600 text-white'
-    : 'bg-slate-800 text-white'
-  const Icon = entry.type === 'error' ? XCircle : CheckCircle
+  const colors =
+    entry.type === 'error'   ? 'bg-red-600 text-white' :
+    entry.type === 'warning' ? 'bg-orange-500 text-white' :
+                               'bg-slate-800 text-white'
+  const Icon = entry.type === 'error' ? XCircle : entry.type === 'warning' ? XCircle : CheckCircle
   return (
     <div className={`${base} ${colors}`}>
       <Icon size={18} className="flex-shrink-0 mt-0.5" />
@@ -1129,7 +1128,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     return stageOk && categoryOk
   })
 
-  const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, proofHash: string) => {
+  const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice) => {
     setVotedIds(prev => new Set([...prev, proposalId]))
     setProposals(prev =>
       prev.map(p =>
@@ -1145,21 +1144,19 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
       pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
 
-    const { data, error } = await supabase.rpc('cast_vote', {
+    const { data, error } = await supabase.rpc('deposer_bulletin', {
       p_proposal_id: proposalId,
       p_user_hash: userHash,
       p_choice: choiceMap[choice],
-      p_proof_hash: proofHash,
-      p_timestamp: Date.now(),
     })
 
     if (error) {
       showToast('Connexion impossible.', 'error')
     } else if ((data as { error?: string } | null)?.error === 'already_voted') {
-      showToast('Vous avez déjà voté pour cette proposition.', 'info')
+      showToast('Vous avez déjà voté.', 'warning')
+    } else {
+      setResultsProposalId(proposalId)
     }
-
-    setResultsProposalId(proposalId)
   }, [])
 
   const handleLawVoted = useCallback((lawId: string, choice: VoteChoice) => {
@@ -1335,7 +1332,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
       {votingProposal && (
         <VotingBooth
           proposal={votingProposal}
-          onVoted={(choice, hash) => handleVoted(votingProposal.id, choice, hash)}
+          onVoted={(choice) => handleVoted(votingProposal.id, choice)}
           onClose={() => setVotingProposal(null)}
         />
       )}
