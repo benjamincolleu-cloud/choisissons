@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { ElementType } from 'react'
 import { supabase } from './supabaseClient'
-import { getVoterHash, generateVoteProof } from './lib/identity'
+import { getSupabaseIdentity, generateVoteProof } from './lib/identity'
 import {
   Home, Compass, User, Heart, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
@@ -363,14 +363,24 @@ function AboutModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-function LoginScreen({ onLogin }: { onLogin: () => void }) {
-  const [loading, setLoading]         = useState(false)
+function LoginScreen() {
+  const [email, setEmail]             = useState('')
+  const [sending, setSending]         = useState(false)
+  const [sent, setSent]               = useState(false)
   const [activeStep, setActiveStep]   = useState<number | null>(null)
   const [showAbout, setShowAbout]     = useState(false)
 
-  const handleLogin = () => {
-    setLoading(true)
-    setTimeout(onLogin, 1500)
+  const handleSendLink = async () => {
+    if (!email.trim() || sending) return
+    setSending(true)
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim() })
+    if (error) {
+      showToast("Impossible d'envoyer le lien. Vérifiez votre adresse email.")
+      setSending(false)
+    } else {
+      setSent(true)
+      setSending(false)
+    }
   }
 
   return (
@@ -401,24 +411,51 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           ))}
         </div>
 
-        {/* FranceConnect button */}
-        <button
-          onClick={handleLogin}
-          disabled={loading}
-          className="w-full bg-[#003189] text-white rounded-xl py-4 px-6 font-semibold text-base flex items-center justify-center gap-3 shadow-xl hover:bg-[#002570] active:scale-95 transition-all disabled:opacity-70"
-        >
-          {loading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <span className="text-xl font-black tracking-tighter">FC</span>
-              <span>Se connecter avec FranceConnect</span>
-            </>
-          )}
-        </button>
+        {/* Magic Link form */}
+        {sent ? (
+          <div className="bg-white/10 rounded-2xl p-5 text-center border border-white/20">
+            <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center mx-auto mb-3">
+              <CheckCircle size={24} className="text-white" />
+            </div>
+            <p className="text-white font-bold text-base mb-1">Vérifiez votre boîte mail</p>
+            <p className="text-indigo-200 text-xs leading-relaxed mb-3">
+              Un lien de connexion a été envoyé à{' '}
+              <span className="font-semibold text-white">{email}</span>
+            </p>
+            <button
+              onClick={() => setSent(false)}
+              className="text-indigo-300 text-xs underline underline-offset-2 hover:text-indigo-100 transition-colors"
+            >
+              Changer d'adresse email
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && void handleSendLink()}
+              placeholder="votre@email.fr"
+              autoComplete="email"
+              className="w-full bg-white/10 border border-white/20 text-white placeholder-indigo-300 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300 mb-3"
+            />
+            <button
+              onClick={() => void handleSendLink()}
+              disabled={!email.trim() || sending}
+              className="w-full bg-indigo-500 text-white rounded-xl py-4 px-6 font-semibold text-base flex items-center justify-center gap-3 shadow-xl hover:bg-indigo-400 active:scale-95 transition-all disabled:opacity-70"
+            >
+              {sending ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                'Recevoir mon lien de connexion'
+              )}
+            </button>
+          </>
+        )}
 
         <p className="text-center text-indigo-400 text-xs mt-3">
-          Prototype en cours de développement — FranceConnect réel en Phase 2
+          Connexion sécurisée sans mot de passe · Phase 2 : FranceConnect
         </p>
 
         <button
@@ -3345,11 +3382,18 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    // TODO Phase 2: FranceConnect — remplacer getVoterHash() par l'identifiant vérifié FranceConnect
-    getVoterHash().then(hash => {
-      setUserHash(hash)
-      flushPendingVotes()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        // TODO Phase 2: FranceConnect — remplacer session.user.id par l'identifiant FranceConnect vérifié
+        const hash = await getSupabaseIdentity(session.user.id)
+        setUserHash(hash)
+        setIsLoggedIn(true)
+        flushPendingVotes()
+      } else {
+        setIsLoggedIn(false)
+      }
     })
+    return () => subscription.unsubscribe()
   }, [])
 
   const dismissToast = useCallback((id: number) => {
@@ -3379,7 +3423,7 @@ export default function App() {
   ]
 
   if (!isLoggedIn) {
-    return <LoginScreen onLogin={() => setIsLoggedIn(true)} />
+    return <LoginScreen />
   }
 
   // Full-screen dashboards — no nav bar
@@ -3421,7 +3465,7 @@ export default function App() {
         {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} />}
         {activePage === 'profile' && (
           <ProfilePage
-            onLogout={() => { setIsLoggedIn(false); setActivePage('home') }}
+            onLogout={() => { void supabase.auth.signOut(); setActivePage('home') }}
             onNavigateElu={handleNavigateElu}
             onNavigateOrg={handleNavigateOrg}
             userHash={userHash}

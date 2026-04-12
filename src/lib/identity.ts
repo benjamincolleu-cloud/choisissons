@@ -19,10 +19,20 @@ async function sha256(input: string): Promise<string> {
 /**
  * Returns the SHA-256 hash of the persistent voter UUID.
  * The raw UUID never leaves this module — only the hash is sent to Supabase.
+ * Utilisé uniquement pour les votes en attente (offline) avant connexion.
  */
 export async function getVoterHash(): Promise<string> {
   const uuid = getOrCreateVoterId()
   return sha256(uuid)
+}
+
+/**
+ * Derives the user_hash from a Supabase Auth user ID.
+ * The raw user ID is hashed before any write to Supabase — same privacy guarantee as getVoterHash().
+ * TODO Phase 2: FranceConnect — remplacer userId par l'identifiant FranceConnect vérifié.
+ */
+export async function getSupabaseIdentity(userId: string): Promise<string> {
+  return sha256(userId)
 }
 
 /**
