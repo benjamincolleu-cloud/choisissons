@@ -803,6 +803,9 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
   const total    = proposal.votes.pour + proposal.votes.contre + proposal.votes.blanc
   const progress = Math.min((proposal.signatures / proposal.targetSignatures) * 100, 100)
 
+  // Stable pseudo-random juror count derived from proposal id (20–80)
+  const jurorsValidated = ((parseInt(proposal.id, 10) || proposal.id.charCodeAt(0)) % 61) + 20
+
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       <div className="p-4">
@@ -821,8 +824,8 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
           </div>
         )}
 
-        {/* Signatures progress */}
-        {(proposal.stage === 'seedling' || proposal.stage === 'review') && (
+        {/* Signatures progress — seedling only */}
+        {proposal.stage === 'seedling' && (
           <div className="mb-3">
             <div className="flex justify-between text-xs text-slate-400 mb-1">
               <span>{proposal.signatures.toLocaleString('fr-FR')} signatures</span>
@@ -837,6 +840,28 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
           </div>
         )}
 
+        {/* Jury validation progress — review only */}
+        {proposal.stage === 'review' && (
+          <div className="mb-3">
+            <div className="flex items-center gap-1.5 mb-2">
+              <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <Users size={11} className="text-amber-600" />
+              </div>
+              <span className="text-xs font-semibold text-amber-700">En examen par le Jury Citoyen</span>
+            </div>
+            <div className="flex justify-between text-xs text-slate-400 mb-1">
+              <span>Jurés ayant validé : <strong className="text-amber-600">{jurorsValidated}</strong> / 100</span>
+              <span>{jurorsValidated}%</span>
+            </div>
+            <div className="h-1.5 bg-amber-50 rounded-full overflow-hidden border border-amber-100">
+              <div
+                className="h-full bg-amber-400 rounded-full transition-all"
+                style={{ width: `${jurorsValidated}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Vote results */}
         {total > 0 && <VoteBar votes={proposal.votes} />}
         {total > 0 && (
@@ -845,18 +870,28 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
       </div>
 
       <div className="px-4 pb-4">
-        <button
-          onClick={onOpen}
-          className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${
-            proposal.stage === 'voting'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-              : 'bg-slate-100 text-slate-700'
-          }`}
-        >
-          {proposal.stage === 'voting' ? <Vote size={15} /> : <Info size={15} />}
-          {proposal.stage === 'voting' ? "S'informer & Voter" : "S'informer"}
-          <ChevronRight size={14} />
-        </button>
+        {proposal.stage === 'review' ? (
+          <button
+            disabled
+            className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-amber-50 text-amber-500 border border-amber-200 cursor-not-allowed"
+          >
+            <Users size={15} />
+            Vote disponible après validation
+          </button>
+        ) : (
+          <button
+            onClick={onOpen}
+            className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${
+              proposal.stage === 'voting'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {proposal.stage === 'voting' ? <Vote size={15} /> : <Info size={15} />}
+            {proposal.stage === 'voting' ? "S'informer & Voter" : "S'informer"}
+            <ChevronRight size={14} />
+          </button>
+        )}
       </div>
     </div>
   )
@@ -1714,15 +1749,16 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
     return () => { cancelled = true }
   }, [userHash])
 
-  // Fetch "Mes propositions" from Supabase (author match on user name)
+  // Fetch "Mes propositions" from Supabase (filtré par author_hash)
   useEffect(() => {
+    if (!userHash) return
     let cancelled = false
     async function fetchMyProposals() {
       try {
         const { data, error } = await supabase
           .from('proposals')
           .select('id, title, status')
-          .eq('author', MOCK_USER.name)
+          .eq('author_hash', userHash)
           .order('created_at', { ascending: false })
         if (error) throw error
         if (!cancelled && data) {
@@ -1742,7 +1778,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, userHash }: {
     }
     fetchMyProposals()
     return () => { cancelled = true }
-  }, [])
+  }, [userHash])
 
   // Load joined communes on mount
   useEffect(() => {
