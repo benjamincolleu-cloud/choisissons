@@ -1170,25 +1170,21 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     const choiceMap: Record<VoteChoice, string> = {
       pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
-    const voteTimestamp = Date.now()
-    try {
-      const { data, error } = await supabase.rpc('cast_vote', {
-        p_proposal_id: proposalId,
-        p_user_hash: userHash,
-        p_choice: choiceMap[choice],
-        p_proof_hash: proofHash,
-        p_timestamp: voteTimestamp,
-      })
-      if (error) throw error
-      if ((data as { error?: string } | null)?.error === 'already_voted') {
-        showToast('Vous avez déjà voté pour cette proposition.', 'info')
-      }
-    } catch {
-      const pending = loadPendingVotes()
-      pending.push({ proposalId, userHash, choice: choiceMap[choice], proofHash, timestamp: voteTimestamp })
-      savePendingVotes(pending)
-      showToast('Vote sauvegardé localement. Il sera envoyé à la prochaine connexion.', 'info')
+
+    const { data, error } = await supabase.rpc('cast_vote', {
+      p_proposal_id: proposalId,
+      p_user_hash: userHash,
+      p_choice: choiceMap[choice],
+      p_proof_hash: proofHash,
+      p_timestamp: Date.now(),
+    })
+
+    if (error) {
+      showToast('Connexion impossible.', 'error')
+    } else if ((data as { error?: string } | null)?.error === 'already_voted') {
+      showToast('Vous avez déjà voté pour cette proposition.', 'info')
     }
+
     setResultsProposalId(proposalId)
   }, [])
 
