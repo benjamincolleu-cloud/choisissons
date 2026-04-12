@@ -733,15 +733,15 @@ function ResultsModal({ proposalId, onClose }: { proposalId: string; onClose: ()
       try {
         const { data, error } = await supabase
           .from('proposals')
-          .select('votes_pour, votes_contre, votes_blanc')
+          .select('votes_yes, votes_no, votes_abstain')
           .eq('id', proposalId)
           .single()
         if (error) throw error
         if (!cancelled && data) {
           setVotes({
-            pour:   (data as { votes_pour: number }).votes_pour   ?? 0,
-            contre: (data as { votes_contre: number }).votes_contre ?? 0,
-            blanc:  (data as { votes_blanc: number }).votes_blanc  ?? 0,
+            pour:   (data as { votes_yes: number }).votes_yes       ?? 0,
+            contre: (data as { votes_no: number }).votes_no         ?? 0,
+            blanc:  (data as { votes_abstain: number }).votes_abstain ?? 0,
           })
         }
       } catch { /* keep zeros */ }
