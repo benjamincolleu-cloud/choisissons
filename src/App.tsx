@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import type { ElementType } from 'react'
 import { supabase } from './supabaseClient'
 import { getSupabaseIdentity, generateVoteProof } from './lib/identity'
+import { computeUrneRootHash, anchorHash } from './lib/blockchain'
 import {
   Home, Compass, User, Heart, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
@@ -12,7 +13,7 @@ import {
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────
-type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected'
+type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
 type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'elu' | 'org' | 'admin'
 
@@ -37,6 +38,7 @@ interface Proposal {
   author: string
   date: string
   tags: string[]
+  blockchainProof?: string
 }
 
 interface MockUser {
@@ -60,6 +62,7 @@ interface ProposalRow {
   votes_blanc: number
   tags: string[] | null
   created_at: string
+  blockchain_proof?: string | null
 }
 
 function mapRowToProposal(row: ProposalRow): Proposal {
@@ -76,6 +79,7 @@ function mapRowToProposal(row: ProposalRow): Proposal {
     author: 'Proposé par la communauté',
     date: row.created_at?.slice(0, 10) ?? '',
     tags: row.tags ?? [],
+    blockchainProof: row.blockchain_proof ?? undefined,
   }
 }
 
@@ -232,6 +236,7 @@ const STAGE_CONFIG: Record<Stage, { label: string; color: string; icon: ElementT
   voting:   { label: 'Vote ouvert', color: 'bg-indigo-100 text-indigo-700', icon: Vote, description: 'Votez maintenant' },
   adopted:  { label: 'Adoptée', color: 'bg-green-100 text-green-700', icon: CheckCircle, description: 'Proposition adoptée' },
   rejected: { label: 'Rejetée', color: 'bg-red-100 text-red-700', icon: XCircle, description: 'Proposition rejetée' },
+  closed:   { label: 'Clôturé', color: 'bg-teal-100 text-teal-700', icon: Lock, description: 'Vote clôturé et ancré' },
 }
 
 // ── Shared Components ──────────────────────────────────────────
@@ -957,7 +962,28 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
       </div>
 
       <div className="px-4 pb-4">
-        {proposal.stage === 'review' ? (
+        {proposal.stage === 'closed' ? (
+          proposal.blockchainProof ? (
+            <a
+              href={proposal.blockchainProof}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors"
+            >
+              <Lock size={15} />
+              Ancré sur Ethereum
+              <ExternalLink size={13} />
+            </a>
+          ) : (
+            <button
+              disabled
+              className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-slate-100 text-slate-400 cursor-not-allowed"
+            >
+              <Lock size={15} />
+              Vote clôturé
+            </button>
+          )
+        ) : proposal.stage === 'review' ? (
           <button
             disabled
             className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-amber-50 text-amber-500 border border-amber-200 cursor-not-allowed"
@@ -1145,7 +1171,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
       try {
         const { data, error } = await supabase
           .from('proposals')
-          .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at')
+          .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof')
           .order('created_at', { ascending: false })
         if (error) throw error
         if (!cancelled && data && data.length > 0) {
@@ -1462,7 +1488,7 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
       try {
         const { data, error } = await supabase
           .from('proposals')
-          .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at')
+          .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof')
         if (error) throw error
         if (!cancelled && data && data.length > 0) {
           const mapped = (data as ProposalRow[]).map(mapRowToProposal)
@@ -2172,7 +2198,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
           <div className="space-y-2">
             {myProposals.map(p => {
               const stageEmoji: Record<Stage, string> = {
-                seedling: '🌱', review: '🔍', voting: '🗳️', adopted: '✅', rejected: '❌'
+                seedling: '🌱', review: '🔍', voting: '🗳️', adopted: '✅', rejected: '❌', closed: '⛓️'
               }
               const soutiens = p.supports ?? 0
               const pct = Math.min(100, (soutiens / 10) * 100)
@@ -2413,7 +2439,7 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
         const [followersRes, proposalsRes, lawsRes] = await Promise.all([
           supabase.from('citizen_organisations').select('id', { count: 'exact', head: true }).eq('organisation_id', org.id),
           supabase.from('proposals').select('id,title,status,votes_pour,votes_contre,votes_blanc,created_at').eq('author', org.name),
-          supabase.from('proposals').select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at').eq('status', 'voting'),
+          supabase.from('proposals').select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof').eq('status', 'voting'),
         ])
         if (!cancelled) {
           if (followersRes.count !== null) setFollowerCount(followersRes.count)
@@ -2816,7 +2842,7 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
       try {
         const [membersRes, lawsRes, consultRes] = await Promise.all([
           supabase.from('citizen_organisations').select('id', { count: 'exact', head: true }).eq('organisation_id', commune.id),
-          supabase.from('proposals').select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at').eq('status', 'voting'),
+          supabase.from('proposals').select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof').eq('status', 'voting'),
           supabase.from('proposals').select('id,title,description,status,created_at,votes_pour,votes_contre,votes_blanc').eq('author', commune.name),
         ])
         if (!cancelled) {
@@ -3418,6 +3444,7 @@ interface AdminProposal {
   status: string
   supports: number
   created_at: string
+  blockchain_proof?: string | null
 }
 
 function AdminDashboard({ onBack }: { onBack: () => void }) {
@@ -3434,7 +3461,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
       try {
         const [propsRes, urneRes, registreRes] = await Promise.all([
           supabase.from('proposals')
-            .select('id,title,description,status,supports,created_at')
+            .select('id,title,description,status,supports,created_at,blockchain_proof')
             .order('created_at', { ascending: false }),
           supabase.from('urne_electronique').select('id', { count: 'exact', head: true }),
           supabase.from('registre_scrutin').select('id', { count: 'exact', head: true }),
@@ -3478,6 +3505,22 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
     setActioningId(null)
   }
 
+  async function handleAnchor(id: string) {
+    setActioningId(id)
+    try {
+      const rootHash = await computeUrneRootHash(id)
+      const txUrl = await anchorHash(id, rootHash)
+      const { error } = await supabase.from('proposals')
+        .update({ status: 'closed', blockchain_proof: txUrl }).eq('id', id)
+      if (error) throw error
+      setProposals(prev => prev.map(p => p.id === id ? { ...p, status: 'closed', blockchain_proof: txUrl } : p))
+      showToast('Vote clôturé et ancré sur Ethereum.', 'info')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Une erreur est survenue. Réessayez.')
+    }
+    setActioningId(null)
+  }
+
   const reviewProposals = proposals.filter(p => p.status === 'review')
 
   const statusCounts = proposals.reduce<Record<string, number>>((acc, p) => {
@@ -3491,6 +3534,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
     voting:   { text: 'Vote',      color: 'bg-indigo-100 text-indigo-700' },
     adopted:  { text: 'Adoptée',   color: 'bg-green-100 text-green-700' },
     rejected: { text: 'Rejetée',   color: 'bg-red-100 text-red-600' },
+    closed:   { text: 'Clôturé',   color: 'bg-teal-100 text-teal-700' },
   }
 
   return (
@@ -3604,24 +3648,49 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
               {proposals.map(p => {
                 const s = statusLabel[p.status] ?? { text: p.status, color: 'bg-slate-100 text-slate-600' }
                 return (
-                  <div key={p.id} className="bg-white rounded-xl border border-slate-100 px-3 py-2.5 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-700 truncate">{p.title}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{p.created_at?.slice(0, 10)}</p>
+                  <div key={p.id} className="bg-white rounded-xl border border-slate-100 px-3 py-2.5 flex flex-col gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-700 truncate">{p.title}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{p.created_at?.slice(0, 10)}</p>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${s.color}`}>
+                        {s.text}
+                      </span>
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        disabled={actioningId === p.id}
+                        className="flex-shrink-0 w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-400 hover:bg-red-100 active:scale-95 transition-all disabled:opacity-40"
+                        title="Supprimer"
+                      >
+                        {actioningId === p.id
+                          ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                          : <Trash2 size={13} />}
+                      </button>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${s.color}`}>
-                      {s.text}
-                    </span>
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      disabled={actioningId === p.id}
-                      className="flex-shrink-0 w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-400 hover:bg-red-100 active:scale-95 transition-all disabled:opacity-40"
-                      title="Supprimer"
-                    >
-                      {actioningId === p.id
-                        ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
-                        : <Trash2 size={13} />}
-                    </button>
+                    {p.status === 'voting' && (
+                      <button
+                        onClick={() => handleAnchor(p.id)}
+                        disabled={actioningId === p.id}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {actioningId === p.id
+                          ? <><div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> Ancrage en cours…</>
+                          : <><Lock size={12} /> Clôturer et ancrer sur Ethereum</>}
+                      </button>
+                    )}
+                    {p.status === 'closed' && p.blockchain_proof && (
+                      <a
+                        href={p.blockchain_proof}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 text-xs font-semibold hover:bg-teal-100 transition-colors"
+                      >
+                        <Lock size={12} />
+                        Voir sur Etherscan
+                        <ExternalLink size={11} />
+                      </a>
+                    )}
                   </div>
                 )
               })}
