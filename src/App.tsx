@@ -230,6 +230,13 @@ async function flushPendingVotes() {
 
 const ADMIN_EMAILS: string[] = ['ton@email.com']
 
+const VOTE_CHOICE_LABEL: Record<VoteChoice, string> = { pour: 'Pour', contre: 'Contre', blanc: 'Blanc' }
+const VOTE_CHOICE_BADGE: Record<VoteChoice, string> = {
+  pour:   'bg-green-100 text-green-700',
+  contre: 'bg-red-100 text-red-600',
+  blanc:  'bg-slate-100 text-slate-600',
+}
+
 const STAGE_CONFIG: Record<Stage, { label: string; color: string; icon: ElementType; description: string }> = {
   seedling: { label: 'Pépinière', color: 'bg-emerald-100 text-emerald-700', icon: Sprout, description: 'En cours de signatures' },
   review:   { label: 'Jury citoyen', color: 'bg-amber-100 text-amber-700', icon: Users, description: 'Examinée par le jury' },
@@ -891,7 +898,12 @@ function ResultsModal({ proposalId, onClose }: { proposalId: string; onClose: ()
 }
 
 // ── Proposal Card ──────────────────────────────────────────────
-function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => void }) {
+function ProposalCard({ proposal, onOpen, currentVote, onRevote }: {
+  proposal: Proposal
+  onOpen: () => void
+  currentVote?: VoteChoice
+  onRevote?: () => void
+}) {
   const total    = proposal.votes.pour + proposal.votes.contre + proposal.votes.blanc
   const progress = Math.min((proposal.signatures / proposal.targetSignatures) * 100, 100)
 
@@ -991,6 +1003,24 @@ function ProposalCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => 
             <Users size={15} />
             Vote disponible après validation du Jury
           </button>
+        ) : proposal.stage === 'voting' && currentVote ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+              <span className="text-sm text-slate-600">
+                Vous avez voté{' '}
+                <span className={`font-semibold px-1.5 py-0.5 rounded-full text-xs ${VOTE_CHOICE_BADGE[currentVote]}`}>
+                  {VOTE_CHOICE_LABEL[currentVote]}
+                </span>
+              </span>
+            </div>
+            <button
+              onClick={onRevote}
+              className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors active:scale-95"
+            >
+              Changer mon vote
+            </button>
+          </div>
         ) : (
           <button
             onClick={onOpen}
@@ -1155,7 +1185,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   const [activeCategory, setActiveCategory] = useState<string | null>(initialCategory ?? null)
   const [agoraProposal, setAgoraProposal]   = useState<Proposal | null>(null)
   const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
-  const [votedIds, setVotedIds]             = useState<Set<string>>(new Set())
+  const [votedChoices, setVotedChoices]     = useState<Record<string, VoteChoice>>({})
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
 
   // ── Lois en cours state ────────────────────────────────────────
@@ -1193,14 +1223,18 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     return stageOk && categoryOk
   })
 
-  const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice) => {
-    setVotedIds(prev => new Set([...prev, proposalId]))
+  const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) => {
+    const isRevote = oldChoice !== undefined
+    setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
     setProposals(prev =>
-      prev.map(p =>
-        p.id !== proposalId
-          ? p
-          : { ...p, votes: { ...p.votes, [choice]: p.votes[choice] + 1 } }
-      )
+      prev.map(p => {
+        if (p.id !== proposalId) return p
+        const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
+        if (isRevote && oldChoice) {
+          newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
+        }
+        return { ...p, votes: newVotes }
+      })
     )
     setVotingProposal(null)
     setAgoraProposal(null)
@@ -1221,12 +1255,12 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
         savePendingVotes([...pending, { proposalId, userHash, choice: choiceMap[choice], timestamp: Date.now() }])
       }
       showToast('Vote sauvegardé localement. Il sera envoyé à la prochaine connexion.', 'warning')
-    } else if ((data as { error?: string } | null)?.error === 'already_voted') {
-      showToast('Vous avez déjà voté.', 'warning')
+    } else if (isRevote) {
+      showToast('Vote mis à jour ✓', 'info')
     } else {
       setResultsProposalId(proposalId)
     }
-  }, [])
+  }, [userHash])
 
   const handleLawVoted = useCallback((lawId: string, choice: VoteChoice) => {
     setLawVotedIds(prev => new Set([...prev, lawId]))
@@ -1381,6 +1415,8 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
                     key={proposal.id}
                     proposal={proposal}
                     onOpen={() => setAgoraProposal(proposal)}
+                    currentVote={votedChoices[proposal.id]}
+                    onRevote={() => setVotingProposal(proposal)}
                   />
                 ))}
               </div>
@@ -1395,13 +1431,13 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
           proposal={agoraProposal}
           onVote={() => setVotingProposal(agoraProposal)}
           onClose={() => setAgoraProposal(null)}
-          hasVoted={votedIds.has(agoraProposal.id)}
+          hasVoted={agoraProposal.id in votedChoices}
         />
       )}
       {votingProposal && (
         <VotingBooth
           proposal={votingProposal}
-          onVoted={(choice) => handleVoted(votingProposal.id, choice)}
+          onVoted={(choice) => handleVoted(votingProposal.id, choice, votedChoices[votingProposal.id])}
           onClose={() => setVotingProposal(null)}
         />
       )}
