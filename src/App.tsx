@@ -1243,7 +1243,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
       pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
 
-    const { data, error } = await supabase.rpc('deposer_bulletin', {
+    const { error } = await supabase.rpc('deposer_bulletin', {
       p_proposal_id: proposalId,
       p_user_hash: userHash,
       p_choice: choiceMap[choice],
