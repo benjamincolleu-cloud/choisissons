@@ -3823,6 +3823,7 @@ export default function App() {
         setUserEmail(session.user.email ?? '')
         setIsLoggedIn(true)
         flushPendingVotes()
+        window.history.replaceState(null, '', window.location.pathname)
       }
       if (event === 'SIGNED_OUT') {
         setIsLoggedIn(false)
