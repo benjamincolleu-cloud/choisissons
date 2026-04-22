@@ -3792,6 +3792,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
 // ── Main App ───────────────────────────────────────────────────
 export default function App() {
   const [isLoggedIn, setIsLoggedIn]         = useState(false)
+  const [isLoading, setIsLoading]           = useState(true)
   const [activePage, setActivePage]         = useState<NavPage>('home')
   const [showPropose, setShowPropose]       = useState(false)
   const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
@@ -3801,23 +3802,9 @@ export default function App() {
   const [userEmail, setUserEmail]             = useState<string>('')
   const [toasts, setToasts]                   = useState<ToastEntry[]>([])
 
+  // Auth useEffect en premier : le listener doit être actif avant getSession
+  // pour ne pas manquer le SIGNED_IN déclenché par le token du magic link dans l'URL
   useEffect(() => {
-    _toastHandler = (entry) => setToasts(prev => [...prev, entry])
-    return () => { _toastHandler = null }
-  }, [])
-
-  useEffect(() => {
-    // Vérifie la session existante dès le montage (gère le redirect du magic link)
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        const hash = await getSupabaseIdentity(session.user.id)
-        setUserHash(hash)
-        setUserEmail(session.user.email ?? '')
-        setIsLoggedIn(true)
-        flushPendingVotes()
-      }
-    })
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         // TODO Phase 2: FranceConnect — remplacer session.user.id par l'identifiant FranceConnect vérifié
@@ -3831,7 +3818,24 @@ export default function App() {
         setIsLoggedIn(false)
       }
     })
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        const hash = await getSupabaseIdentity(session.user.id)
+        setUserHash(hash)
+        setUserEmail(session.user.email ?? '')
+        setIsLoggedIn(true)
+        flushPendingVotes()
+      }
+      setIsLoading(false)
+    })
+
     return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    _toastHandler = (entry) => setToasts(prev => [...prev, entry])
+    return () => { _toastHandler = null }
   }, [])
 
   const dismissToast = useCallback((id: number) => {
@@ -3860,9 +3864,8 @@ export default function App() {
     { page: 'support', label: 'Soutenir', icon: Heart },
   ]
 
-  if (!isLoggedIn) {
-    return <LoginScreen />
-  }
+  if (isLoading) return <div className="min-h-screen bg-white" />
+  if (!isLoggedIn) return <LoginScreen />
 
   // Full-screen dashboards — no nav bar
   if (activePage === 'elu' && selectedCommune) {
