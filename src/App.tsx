@@ -387,7 +387,13 @@ function LoginScreen() {
   const handleSendLink = async () => {
     if (!email.trim() || sending) return
     setSending(true)
-    const { error } = await supabase.auth.signInWithOtp({ email: email.trim() })
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        emailRedirectTo: 'https://choisissons-git-main-benjamins-projects-9822b354.vercel.app',
+        shouldCreateUser: true,
+      },
+    })
     if (error) {
       showToast("Impossible d'envoyer le lien. Vérifiez votre adresse email.")
       setSending(false)
@@ -470,6 +476,10 @@ function LoginScreen() {
 
         <p className="text-center text-indigo-400 text-xs mt-3">
           Connexion sécurisée sans mot de passe · Phase 2 : FranceConnect
+        </p>
+
+        <p className="text-center text-amber-300/80 text-xs mt-2 leading-relaxed">
+          Ouvrez le lien depuis votre navigateur principal (Safari ou Chrome), pas depuis l'app Mail.
         </p>
 
         <button
@@ -3806,7 +3816,7 @@ export default function App() {
   // pour ne pas manquer le SIGNED_IN déclenché par le token du magic link dans l'URL
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         // TODO Phase 2: FranceConnect — remplacer session.user.id par l'identifiant FranceConnect vérifié
         const hash = await getSupabaseIdentity(session.user.id)
         setUserHash(hash)
