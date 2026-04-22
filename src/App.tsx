@@ -3807,15 +3807,27 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Vérifie la session existante dès le montage (gère le redirect du magic link)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
+        const hash = await getSupabaseIdentity(session.user.id)
+        setUserHash(hash)
+        setUserEmail(session.user.email ?? '')
+        setIsLoggedIn(true)
+        flushPendingVotes()
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
         // TODO Phase 2: FranceConnect — remplacer session.user.id par l'identifiant FranceConnect vérifié
         const hash = await getSupabaseIdentity(session.user.id)
         setUserHash(hash)
         setUserEmail(session.user.email ?? '')
         setIsLoggedIn(true)
         flushPendingVotes()
-      } else {
+      }
+      if (event === 'SIGNED_OUT') {
         setIsLoggedIn(false)
       }
     })
