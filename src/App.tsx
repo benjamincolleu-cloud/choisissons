@@ -5,12 +5,12 @@ import { getSupabaseIdentity, generateVoteProof } from './lib/identity'
 import { computeUrneRootHash, anchorHash } from './lib/blockchain'
 import { fetchDossiersLegislatifs } from './lib/assemblee'
 import {
-  Home, Compass, User, Heart, Plus, ChevronRight,
+  Home, Compass, User, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
   Sprout, Users, Vote, Shield, BookOpen,
-  Lock, Star, Newspaper,
+  Lock, Newspaper,
   Building2, ArrowLeft, Info, Landmark,
-  Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText, ArrowUpDown,
+  Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText, ArrowUpDown, TrendingUp,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -3213,206 +3213,138 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
   )
 }
 
-// ── Support Page ───────────────────────────────────────────────
-const COMMUNE_TIERS = [
-  { value: 'small',  label: 'Moins de 5 000 habitants',      price: '49€'  },
-  { value: 'medium', label: 'De 5 000 à 50 000 habitants',   price: '149€' },
-  { value: 'large',  label: 'Plus de 50 000 habitants',       price: '499€' },
-] as const
-type CommuneTier = typeof COMMUNE_TIERS[number]['value']
+// ── Impact Page ────────────────────────────────────────────────
+function CountUp({ value, duration = 1800 }: { value: number; duration?: number }) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (value === 0) { setCount(0); return }
+    const start = performance.now()
+    let rafId: number
+    const tick = (now: number) => {
+      const elapsed = now - start
+      const progress = Math.min(elapsed / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setCount(Math.round(eased * value))
+      if (progress < 1) rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [value, duration])
+  return <>{count.toLocaleString('fr-FR')}</>
+}
 
-function SupportPage() {
-  const [selected, setSelected]       = useState<string | null>(null)
-  const [communeSize, setCommuneSize] = useState<CommuneTier>('small')
+const IMPACT_CATEGORIES: { name: string; color: string }[] = [
+  { name: 'Économie',      color: 'bg-yellow-400' },
+  { name: 'Social',        color: 'bg-blue-400'   },
+  { name: 'Numérique',     color: 'bg-purple-400' },
+  { name: 'Institutions',  color: 'bg-indigo-400' },
+  { name: 'Environnement', color: 'bg-green-400'  },
+]
 
-  const plans: {
-    id: string
-    name: string
-    price: string
-    period: string
-    icon: ElementType
-    headerBg: string
-    borderColor: string
-    features: string[]
-    cta: string
-  }[] = [
-    {
-      id: 'citoyen',
-      name: 'Citoyen',
-      price: '2€',
-      period: '/mois',
-      icon: User,
-      headerBg: 'bg-indigo-600',
-      borderColor: 'border-indigo-300',
-      features: ['Accès complet sans publicité', 'Badge citoyen soutenant', 'Newsletter mensuelle', 'Vote prioritaire'],
-      cta: 'Soutenir la démocratie',
-    },
-    {
-      id: 'media',
-      name: 'Média',
-      price: '29€',
-      period: '/mois',
-      icon: Newspaper,
-      headerBg: 'bg-slate-600',
-      borderColor: 'border-slate-300',
-      features: ['API accès données', 'Tableau de bord analytics', 'Export CSV / JSON', 'Badge média partenaire', 'Support prioritaire'],
-      cta: 'Accès média',
-    },
-    {
-      id: 'ong',
-      name: 'ONG / Association',
-      price: '49€',
-      period: '/mois',
-      icon: Building2,
-      headerBg: 'bg-amber-600',
-      borderColor: 'border-amber-300',
-      features: ['Tout l\'offre Média', 'Page organisation dédiée', '10 comptes membres', 'Propositions co-sponsorisées', 'Rapport d\'impact trimestriel'],
-      cta: 'Rejoindre en ONG',
-    },
+function ImpactPage() {
+  const [citizens,          setCitizens]          = useState(0)
+  const [votes,             setVotes]             = useState(0)
+  const [activeProposals,   setActiveProposals]   = useState(0)
+  const [adoptedProposals,  setAdoptedProposals]  = useState(0)
+  const [categoryData,      setCategoryData]      = useState<{ name: string; count: number; color: string }[]>([])
+  const [loading,           setLoading]           = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchStats() {
+      try {
+        const [citizensRes, votesRes, activeRes, adoptedRes, categoryRes] = await Promise.all([
+          Promise.resolve(supabase.rpc('get_citizen_count')).catch(() => ({ data: 0, error: null })),
+          supabase.from('registre_scrutin').select('id', { count: 'exact', head: true }),
+          supabase.from('proposals').select('id', { count: 'exact', head: true }).eq('status', 'voting'),
+          supabase.from('proposals').select('id', { count: 'exact', head: true }).eq('status', 'adopted'),
+          supabase.from('proposals').select('category'),
+        ])
+        if (!cancelled) {
+          setCitizens((citizensRes.data as number) ?? 0)
+          setVotes(votesRes.count ?? 0)
+          setActiveProposals(activeRes.count ?? 0)
+          setAdoptedProposals(adoptedRes.count ?? 0)
+
+          const groups: Record<string, number> = {}
+          for (const p of ((categoryRes.data ?? []) as { category: string }[])) {
+            groups[p.category] = (groups[p.category] ?? 0) + 1
+          }
+          setCategoryData(IMPACT_CATEGORIES.map(c => ({ ...c, count: groups[c.name] ?? 0 })))
+        }
+      } catch {
+        if (!cancelled) setCategoryData(IMPACT_CATEGORIES.map(c => ({ ...c, count: 0 })))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchStats()
+    return () => { cancelled = true }
+  }, [])
+
+  const maxCategoryCount = Math.max(...categoryData.map(c => c.count), 1)
+
+  const counters: { label: string; value: number; bg: string; icon: ElementType }[] = [
+    { label: 'Citoyens inscrits',      value: citizens,         bg: 'bg-indigo-600',  icon: Users        },
+    { label: 'Votes exprimés',         value: votes,            bg: 'bg-green-600',   icon: Vote         },
+    { label: 'Propositions en vote',   value: activeProposals,  bg: 'bg-amber-500',   icon: Sprout       },
+    { label: 'Propositions adoptées',  value: adoptedProposals, bg: 'bg-teal-600',    icon: CheckCircle  },
   ]
 
   return (
     <div className="p-4">
       <div className="mb-5">
-        <h1 className="text-2xl font-black text-slate-800">Soutenir</h1>
-        <p className="text-slate-500 text-sm leading-relaxed">
-          Choisissons est indépendant. Votre soutien garantit notre neutralité.
-        </p>
+        <h1 className="text-2xl font-black text-slate-800">Impact</h1>
+        <p className="text-slate-500 text-sm">La démocratie citoyenne en chiffres</p>
       </div>
 
-      {/* Mission banner */}
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-2xl p-4 mb-6 text-white">
-        <div className="flex items-start gap-3">
-          <Star size={20} className="text-yellow-300 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold text-sm mb-1">Notre engagement</p>
-            <p className="text-indigo-100 text-xs leading-relaxed">
-              Aucune publicité, aucun financement politique. 100% des revenus financent l'infrastructure et la sécurité.
-            </p>
+      {/* 4 stat counters */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        {counters.map(({ label, value, bg, icon: Icon }) => (
+          <div key={label} className={`${bg} rounded-2xl p-4 text-white`}>
+            <Icon size={18} className="opacity-75 mb-2" />
+            <div className="text-3xl font-black leading-tight tabular-nums">
+              {loading ? <span className="opacity-40">—</span> : <CountUp value={value} />}
+            </div>
+            <div className="text-xs opacity-75 mt-1 leading-snug">{label}</div>
           </div>
-        </div>
+        ))}
       </div>
 
-      {/* Plans */}
-      <div className="space-y-4">
-        {plans.map(plan => {
-          const Icon = plan.icon
-          const isSelected = selected === plan.id
-          return (
-            <div
-              key={plan.id}
-              className={`rounded-2xl border-2 overflow-hidden transition-all ${plan.borderColor} ${isSelected ? 'shadow-lg' : ''}`}
-            >
-              <div className={`${plan.headerBg} p-4 text-white flex items-center justify-between`}>
-                <div className="flex items-center gap-3">
-                  <Icon size={20} />
-                  <span className="font-black text-lg">{plan.name}</span>
+      {/* Category bar chart */}
+      <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-5">
+        <h2 className="font-bold text-slate-800 text-sm mb-4">Propositions par catégorie</h2>
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="animate-pulse">
+                <div className="h-3 bg-slate-100 rounded w-1/3 mb-1.5" />
+                <div className="h-3 bg-slate-100 rounded-full" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {categoryData.map(({ name, count, color }) => (
+              <div key={name}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-slate-600">{name}</span>
+                  <span className="text-xs font-bold text-slate-800 tabular-nums">{count}</span>
                 </div>
-                <div className="text-right">
-                  <span className="text-2xl font-black">{plan.price}</span>
-                  <span className="text-xs opacity-75 ml-0.5">{plan.period}</span>
+                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
+                    style={{ width: count === 0 ? '2px' : `${Math.round((count / maxCategoryCount) * 100)}%` }}
+                  />
                 </div>
               </div>
-              <div className="p-4 bg-white">
-                <ul className="space-y-2 mb-4">
-                  {plan.features.map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
-                      <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => setSelected(isSelected ? null : plan.id)}
-                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
-                    isSelected
-                      ? 'bg-slate-800 text-white'
-                      : `${plan.headerBg} text-white`
-                  }`}
-                >
-                  {isSelected ? '✓ Sélectionné — Passer au paiement' : plan.cta}
-                </button>
-              </div>
-            </div>
-          )
-        })}
-
-        {/* Commune & Collectivité — tarif dégressif */}
-        {(() => {
-          const tier = COMMUNE_TIERS.find(t => t.value === communeSize)!
-          const isSelected = selected === 'commune'
-          return (
-            <div className={`rounded-2xl border-2 overflow-hidden transition-all border-teal-300 ${isSelected ? 'shadow-lg' : ''}`}>
-              <div className="bg-teal-700 p-4 text-white flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Landmark size={20} />
-                  <span className="font-black text-lg">Commune &amp; Collectivité</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-2xl font-black">{tier.price}</span>
-                  <span className="text-xs opacity-75 ml-0.5">/mois</span>
-                </div>
-              </div>
-              <div className="p-4 bg-white">
-                {/* Sélecteur tranche d'habitants */}
-                <div className="mb-4">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    Tranche d'habitants
-                  </label>
-                  <div className="space-y-2">
-                    {COMMUNE_TIERS.map(t => (
-                      <button
-                        key={t.value}
-                        onClick={() => setCommuneSize(t.value)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                          communeSize === t.value
-                            ? 'border-teal-500 bg-teal-50 text-teal-800'
-                            : 'border-slate-200 bg-slate-50 text-slate-600'
-                        }`}
-                      >
-                        <span>{t.label}</span>
-                        <span className={`font-black ${communeSize === t.value ? 'text-teal-700' : 'text-slate-400'}`}>
-                          {t.price}/mois
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Features */}
-                <ul className="space-y-2 mb-4">
-                  {[
-                    'Accès API données',
-                    'Tableau de bord pour les élus',
-                    'Consultation citoyenne intégrée',
-                    'Rapport d\'engagement mensuel',
-                    'Support prioritaire',
-                  ].map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
-                      <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <button
-                  onClick={() => setSelected(isSelected ? null : 'commune')}
-                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
-                    isSelected
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-teal-700 text-white'
-                  }`}
-                >
-                  {isSelected ? '✓ Sélectionné — Passer au paiement' : 'Équiper ma commune'}
-                </button>
-              </div>
-            </div>
-          )
-        })()}
+            ))}
+          </div>
+        )}
       </div>
 
-      <p className="text-center text-xs text-slate-400 mt-4 pb-2">
-        Paiement sécurisé par Stripe · Sans engagement · Annulation en 1 clic
+      <p className="text-center text-xs text-slate-300 pb-2">
+        Données en temps réel · Mise à jour à chaque visite
       </p>
     </div>
   )
@@ -3911,7 +3843,7 @@ export default function App() {
     { page: 'home',    label: 'Accueil',  icon: Home },
     { page: 'explore', label: 'Explorer', icon: Compass },
     { page: 'profile', label: 'Mon Compte', icon: User },
-    { page: 'support', label: 'Soutenir', icon: Heart },
+    { page: 'support', label: 'Impact', icon: TrendingUp },
   ]
 
   if (isLoading) return <div className="min-h-screen bg-white" />
@@ -3975,7 +3907,7 @@ export default function App() {
             userEmail={userEmail}
           />
         )}
-        {activePage === 'support' && <SupportPage />}
+        {activePage === 'support' && <ImpactPage />}
       </main>
 
       {/* FAB */}
