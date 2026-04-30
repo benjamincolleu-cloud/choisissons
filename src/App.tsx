@@ -3,6 +3,7 @@ import type { ElementType } from 'react'
 import { supabase } from './supabaseClient'
 import { getSupabaseIdentity, generateVoteProof } from './lib/identity'
 import { computeUrneRootHash, anchorHash } from './lib/blockchain'
+import { fetchDossiersLegislatifs } from './lib/assemblee'
 import {
   Home, Compass, User, Heart, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
@@ -1203,6 +1204,17 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   const [lawVotedIds, setLawVotedIds] = useState<Set<string>>(new Set())
   const [agoraLaw, setAgoraLaw]     = useState<Proposal | null>(null)
   const [votingLaw, setVotingLaw]   = useState<Proposal | null>(null)
+
+  // Fetch lois from Assemblée Nationale API, fall back to hardcoded data silently
+  useEffect(() => {
+    let cancelled = false
+    fetchDossiersLegislatifs().then(anLaws => {
+      if (!cancelled && anLaws.length > 0) {
+        setLaws(anLaws as ParliamentaryLaw[])
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
 
   // Fetch from Supabase, fall back to mock data on error
   useEffect(() => {
