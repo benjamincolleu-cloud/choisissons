@@ -1492,18 +1492,6 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   )
 }
 
-// ── Explore Page ───────────────────────────────────────────────
-const CATEGORY_META: { name: string; emoji: string; textColor: string }[] = [
-  { name: 'Économie',      emoji: '💰', textColor: 'text-yellow-700' },
-  { name: 'Environnement', emoji: '🌿', textColor: 'text-green-700'  },
-  { name: 'Démocratie',   emoji: '🗳️', textColor: 'text-indigo-700' },
-  { name: 'Travail',       emoji: '⚒️', textColor: 'text-orange-700' },
-  { name: 'Éducation',    emoji: '📚', textColor: 'text-blue-700'   },
-  { name: 'Santé',         emoji: '❤️', textColor: 'text-red-700'    },
-  { name: 'Logement',      emoji: '🏠', textColor: 'text-purple-700' },
-  { name: 'Transparence',  emoji: '🔍', textColor: 'text-teal-700'   },
-]
-
 // ── Organisation types ─────────────────────────────────────────
 interface Organisation {
   id: string
