@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import type { ElementType } from 'react'
 import { supabase } from './supabaseClient'
 import { getSupabaseIdentity, generateVoteProof } from './lib/identity'
@@ -10,7 +10,7 @@ import {
   Sprout, Users, Vote, Shield, BookOpen,
   Lock, Star, Newspaper,
   Building2, ArrowLeft, Info, Landmark,
-  Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText,
+  Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText, ArrowUpDown,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -391,7 +391,7 @@ function LoginScreen() {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
-        emailRedirectTo: 'https://choisissons-git-main-benjamins-projects-9822b354.vercel.app',
+        emailRedirectTo: 'https://choisissons.fr',
         shouldCreateUser: true,
       },
     })
@@ -1523,16 +1523,22 @@ const MOCK_ORGANISATIONS: Organisation[] = [
   { id: 'org-7', name: 'Mediapart', type: 'media', description: 'Journal d\'investigation en ligne' },
 ]
 
-function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: string) => void; userHash: string }) {
+function ExplorePage({ onSelectCategory: _onSelectCategory, userHash }: { onSelectCategory: (cat: string) => void; userHash: string }) {
   const [exploreTab, setExploreTab] = useState<'discover' | 'organisations'>('discover')
 
   // Discover tab state
-  const [query, setQuery]           = useState('')
-  const [searchResults, setSearchResults] = useState<Proposal[]>([])
-  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({})
-  const [trending, setTrending]     = useState<Proposal[]>([])
-  const [loadingData, setLoadingData] = useState(true)
+  const [query, setQuery]               = useState('')
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [activeStatus, setActiveStatus] = useState<Stage | null>('voting')
+  const [sortBy, setSortBy]             = useState<'recent' | 'popular'>('recent')
+  const [loadingData, setLoadingData]   = useState(true)
   const [allProposals, setAllProposals] = useState<Proposal[]>(PROPOSALS)
+
+  // Voting flow state
+  const [agoraProposal, setAgoraProposal]   = useState<Proposal | null>(null)
+  const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
+  const [votedChoices, setVotedChoices]     = useState<Record<string, VoteChoice>>({})
+  const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
 
   // Organisations tab state
   const [orgSubTab, setOrgSubTab] = useState<'commune' | 'ong' | 'media'>('commune')
@@ -1549,32 +1555,10 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
           .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof')
         if (error) throw error
         if (!cancelled && data && data.length > 0) {
-          const mapped = (data as ProposalRow[]).map(mapRowToProposal)
-          setAllProposals(mapped)
-          const counts: Record<string, number> = {}
-          for (const p of mapped) {
-            counts[p.category] = (counts[p.category] ?? 0) + 1
-          }
-          setCategoryCounts(counts)
-          const sorted = [...mapped].sort(
-            (a, b) =>
-              (b.votes.pour + b.votes.contre + b.votes.blanc) -
-              (a.votes.pour + a.votes.contre + a.votes.blanc)
-          )
-          setTrending(sorted.slice(0, 3))
+          setAllProposals((data as ProposalRow[]).map(mapRowToProposal))
         }
       } catch {
-        const counts: Record<string, number> = {}
-        for (const p of PROPOSALS) {
-          counts[p.category] = (counts[p.category] ?? 0) + 1
-        }
-        setCategoryCounts(counts)
-        const sorted = [...PROPOSALS].sort(
-          (a, b) =>
-            (b.votes.pour + b.votes.contre + b.votes.blanc) -
-            (a.votes.pour + a.votes.contre + a.votes.blanc)
-        )
-        setTrending(sorted.slice(0, 3))
+        // keep PROPOSALS fallback
       } finally {
         if (!cancelled) setLoadingData(false)
       }
@@ -1635,16 +1619,53 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
     }
   }
 
-  // Real-time search filter
-  useEffect(() => {
-    if (!query.trim()) { setSearchResults([]); return }
-    const q = query.toLowerCase()
-    setSearchResults(
-      allProposals.filter(
-        p => p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
-      ).slice(0, 6)
-    )
-  }, [query, allProposals])
+  async function handleVoted(proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) {
+    setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
+    setAllProposals(prev => prev.map(p => {
+      if (p.id !== proposalId) return p
+      const v = { ...p.votes }
+      if (oldChoice) v[oldChoice === 'pour' ? 'pour' : oldChoice === 'contre' ? 'contre' : 'blanc'] -= 1
+      v[choice === 'pour' ? 'pour' : choice === 'contre' ? 'contre' : 'blanc'] += 1
+      return { ...p, votes: v }
+    }))
+    setVotingProposal(null)
+    setAgoraProposal(null)
+    setResultsProposalId(proposalId)
+  }
+
+  const EXPLORE_CATEGORIES = ['Toutes', 'Économie', 'Social', 'Numérique', 'Institutions', 'Environnement']
+
+  const STATUS_TABS: { key: Stage; label: string }[] = [
+    { key: 'voting',   label: 'En vote'    },
+    { key: 'review',   label: 'En examen'  },
+    { key: 'adopted',  label: 'Adoptées'   },
+  ]
+
+  const filteredProposals = useMemo(() => {
+    let list = allProposals
+    const q = query.trim().toLowerCase()
+    if (q) {
+      list = list.filter(p =>
+        p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+      )
+    }
+    if (activeCategory && activeCategory !== 'Toutes') {
+      list = list.filter(p => p.category === activeCategory)
+    }
+    if (activeStatus) {
+      list = list.filter(p => p.stage === activeStatus)
+    }
+    if (sortBy === 'popular') {
+      list = [...list].sort(
+        (a, b) => (b.votes.pour + b.votes.contre + b.votes.blanc) - (a.votes.pour + a.votes.contre + a.votes.blanc)
+      )
+    } else {
+      list = [...list].sort(
+        (a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime()
+      )
+    }
+    return list
+  }, [allProposals, query, activeCategory, activeStatus, sortBy])
 
   const orgSubTabLabel: Record<'commune' | 'ong' | 'media', string> = {
     commune: 'Communes',
@@ -1676,7 +1697,8 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
       {/* ── Discover tab ── */}
       {exploreTab === 'discover' && (
         <>
-          <div className="relative mb-2">
+          {/* Search */}
+          <div className="relative mb-3">
             <input
               type="text"
               value={query}
@@ -1694,87 +1716,104 @@ function ExplorePage({ onSelectCategory, userHash }: { onSelectCategory: (cat: s
             )}
           </div>
 
-          {query.trim().length > 0 && (
-            <div className="mb-5 space-y-2">
-              {searchResults.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">Aucun résultat pour « {query} »</p>
-              ) : (
-                searchResults.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => onSelectCategory(p.category)}
-                    className="w-full text-left bg-white rounded-xl border border-slate-100 px-4 py-3 shadow-sm active:scale-95 transition-all"
-                  >
-                    <p className="text-sm font-semibold text-slate-800 truncate">{p.title}</p>
-                    <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">{p.description}</p>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <StageBadge stage={p.stage} />
-                      <span className="text-xs text-slate-400">{p.category}</span>
-                    </div>
-                  </button>
-                ))
-              )}
+          {/* Category pills */}
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-hide">
+            {EXPLORE_CATEGORIES.map(cat => {
+              const isActive = cat === 'Toutes' ? !activeCategory || activeCategory === 'Toutes' : activeCategory === cat
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat === 'Toutes' ? null : cat)}
+                  className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    isActive
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-600 active:scale-95'
+                  }`}
+                >
+                  {cat}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Status tabs + sort */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex gap-1">
+              {STATUS_TABS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveStatus(activeStatus === key ? null : key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    activeStatus === key
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-slate-100 text-slate-500 active:scale-95'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setSortBy(s => s === 'recent' ? 'popular' : 'recent')}
+              className="flex items-center gap-1 text-xs text-indigo-600 font-semibold whitespace-nowrap"
+            >
+              <ArrowUpDown size={12} />
+              {sortBy === 'recent' ? 'Récentes' : 'Populaires'}
+            </button>
+          </div>
+
+          {/* Results */}
+          {loadingData ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 animate-pulse">
+                  <div className="h-4 bg-slate-100 rounded w-1/3 mb-3" />
+                  <div className="h-5 bg-slate-100 rounded w-3/4 mb-2" />
+                  <div className="h-3 bg-slate-100 rounded w-full mb-1" />
+                  <div className="h-3 bg-slate-100 rounded w-2/3" />
+                </div>
+              ))}
+            </div>
+          ) : filteredProposals.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-slate-400 text-sm font-medium">Aucun résultat</p>
+              {query && <p className="text-slate-300 text-xs mt-1">pour « {query} »</p>}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredProposals.map(proposal => (
+                <ProposalCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  onOpen={() => setAgoraProposal(proposal)}
+                  currentVote={votedChoices[proposal.id]}
+                  onRevote={() => setVotingProposal(proposal)}
+                />
+              ))}
             </div>
           )}
 
-          {query.trim().length === 0 && (
-            <>
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                {CATEGORY_META.map(cat => (
-                  <button
-                    key={cat.name}
-                    onClick={() => onSelectCategory(cat.name)}
-                    className="bg-white border border-slate-100 rounded-2xl p-4 text-left shadow-sm active:scale-95 transition-all"
-                  >
-                    <div className="text-2xl mb-2">{cat.emoji}</div>
-                    <div className="font-bold text-slate-800 text-sm">{cat.name}</div>
-                    {loadingData ? (
-                      <div className="h-3 w-16 bg-slate-100 rounded-full animate-pulse mt-1" />
-                    ) : (
-                      <div className={`text-xs font-medium mt-0.5 ${cat.textColor}`}>
-                        {categoryCounts[cat.name] ?? 0} proposition{(categoryCounts[cat.name] ?? 0) !== 1 ? 's' : ''}
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              <h2 className="font-bold text-slate-700 mb-3">Tendances cette semaine</h2>
-              {loadingData ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-slate-100 animate-pulse">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0" />
-                      <div className="flex-1 space-y-1.5">
-                        <div className="h-3 bg-slate-100 rounded w-3/4" />
-                        <div className="h-2.5 bg-slate-100 rounded w-1/3" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {trending.map((p, i) => (
-                    <button
-                      key={p.id}
-                      onClick={() => onSelectCategory(p.category)}
-                      className="w-full flex items-center gap-3 bg-white rounded-xl p-3 border border-slate-100 active:scale-95 transition-all text-left"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-black text-sm flex items-center justify-center flex-shrink-0">
-                        #{i + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-700 truncate">{p.title}</p>
-                        <p className="text-xs text-slate-400">
-                          {(p.votes.pour + p.votes.contre + p.votes.blanc).toLocaleString('fr-FR')} votes
-                        </p>
-                      </div>
-                      <ChevronRight size={14} className="text-slate-300 flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
+          {/* Voting modals */}
+          {agoraProposal && !votingProposal && (
+            <AgoraModal
+              proposal={agoraProposal}
+              onVote={() => setVotingProposal(agoraProposal)}
+              onClose={() => setAgoraProposal(null)}
+              hasVoted={agoraProposal.id in votedChoices}
+            />
+          )}
+          {votingProposal && (
+            <VotingBooth
+              proposal={votingProposal}
+              onVoted={(choice) => handleVoted(votingProposal.id, choice, votedChoices[votingProposal.id])}
+              onClose={() => setVotingProposal(null)}
+            />
+          )}
+          {resultsProposalId && (
+            <ResultsModal
+              proposalId={resultsProposalId}
+              onClose={() => setResultsProposalId(null)}
+            />
           )}
         </>
       )}
