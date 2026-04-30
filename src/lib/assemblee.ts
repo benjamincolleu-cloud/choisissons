@@ -114,7 +114,22 @@ function mapDossier(d: unknown, index: number): ANLaw | null {
   }
 }
 
+const CACHE_KEY      = 'an_cache'
+const CACHE_TIME_KEY = 'an_cache_time'
+const CACHE_TTL_MS   = 24 * 60 * 60 * 1000
+
 export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
+  try {
+    const cachedTime = localStorage.getItem(CACHE_TIME_KEY)
+    if (cachedTime) {
+      const age = Date.now() - Number(cachedTime)
+      if (age < CACHE_TTL_MS) {
+        const cached = localStorage.getItem(CACHE_KEY)
+        if (cached) return JSON.parse(cached) as ANLaw[]
+      }
+    }
+  } catch { /* localStorage indisponible — continuer sans cache */ }
+
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8000)
@@ -135,7 +150,14 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
       .map((d, i) => mapDossier(d, i))
       .filter((l): l is ANLaw => l !== null)
 
-    return laws.length > 0 ? laws : FALLBACK_LAWS
+    const result = laws.length > 0 ? laws : FALLBACK_LAWS
+
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(result))
+      localStorage.setItem(CACHE_TIME_KEY, String(Date.now()))
+    } catch { /* quota dépassé — pas bloquant */ }
+
+    return result
   } catch {
     return FALLBACK_LAWS
   }
