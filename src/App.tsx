@@ -3223,9 +3223,34 @@ const COMMUNE_TIERS = [
 ] as const
 type CommuneTier = typeof COMMUNE_TIERS[number]['value']
 
+const COMMUNE_PLAN_MAP: Record<CommuneTier, string> = {
+  small:  'commune_petite',
+  medium: 'commune_moyenne',
+  large:  'commune_grande',
+}
+
 function SupportPage() {
-  const [selected, setSelected]       = useState<string | null>(null)
-  const [communeSize, setCommuneSize] = useState<CommuneTier>('small')
+  const [selected, setSelected]             = useState<string | null>(null)
+  const [communeSize, setCommuneSize]       = useState<CommuneTier>('small')
+  const [loadingCheckout, setLoadingCheckout] = useState<string | null>(null)
+
+  async function handleCheckout(plan: string) {
+    setLoadingCheckout(plan)
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { plan },
+      })
+      if (error || !data?.url) {
+        showToast("Impossible de lancer le paiement. Réessayez plus tard.", 'error')
+        return
+      }
+      window.location.href = data.url as string
+    } catch {
+      showToast("Impossible de lancer le paiement. Réessayez plus tard.", 'error')
+    } finally {
+      setLoadingCheckout(null)
+    }
+  }
 
   const plans: {
     id: string
@@ -3325,12 +3350,13 @@ function SupportPage() {
                   ))}
                 </ul>
                 <button
-                  onClick={() => setSelected(isSelected ? null : plan.id)}
-                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
+                  onClick={() => isSelected ? void handleCheckout(plan.id) : setSelected(plan.id)}
+                  disabled={loadingCheckout === plan.id}
+                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
                     isSelected ? 'bg-slate-800 text-white' : `${plan.headerBg} text-white`
                   }`}
                 >
-                  {isSelected ? '✓ Sélectionné — Passer au paiement' : plan.cta}
+                  {loadingCheckout === plan.id ? 'Redirection…' : isSelected ? '✓ Sélectionné — Passer au paiement →' : plan.cta}
                 </button>
               </div>
             </div>
@@ -3392,12 +3418,13 @@ function SupportPage() {
                   ))}
                 </ul>
                 <button
-                  onClick={() => setSelected(isSelected ? null : 'commune')}
-                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
+                  onClick={() => isSelected ? void handleCheckout(COMMUNE_PLAN_MAP[communeSize]) : setSelected('commune')}
+                  disabled={loadingCheckout === 'commune'}
+                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
                     isSelected ? 'bg-slate-800 text-white' : 'bg-teal-700 text-white'
                   }`}
                 >
-                  {isSelected ? '✓ Sélectionné — Passer au paiement' : 'Équiper ma commune'}
+                  {loadingCheckout === 'commune' ? 'Redirection…' : isSelected ? '✓ Sélectionné — Passer au paiement →' : 'Équiper ma commune'}
                 </button>
               </div>
             </div>
@@ -4016,6 +4043,10 @@ export default function App() {
 
   useEffect(() => {
     _toastHandler = (entry) => setToasts(prev => [...prev, entry])
+    if (window.location.pathname === '/merci') {
+      window.history.replaceState(null, '', '/')
+      showToast('Merci pour votre soutien ! Votre abonnement est maintenant actif.', 'info')
+    }
     return () => { _toastHandler = null }
   }, [])
 
