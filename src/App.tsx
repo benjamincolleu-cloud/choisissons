@@ -229,7 +229,7 @@ async function flushPendingVotes() {
   }
 }
 
-const ADMIN_EMAILS: string[] = ['ton@email.com']
+const ADMIN_EMAILS: string[] = ['benjamin@choisissons.fr', 'benjamin.colleu@gmail.com']
 
 const VOTE_CHOICE_LABEL: Record<VoteChoice, string> = { pour: 'Pour', contre: 'Contre', blanc: 'Blanc' }
 const VOTE_CHOICE_BADGE: Record<VoteChoice, string> = {
