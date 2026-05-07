@@ -1915,6 +1915,16 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   const [myProposals, setMyProposals]         = useState<MyProposalRecord[]>([])
   const [loadingMyProps, setLoadingMyProps]   = useState(true)
 
+  const [profileCommune, setProfileCommune] = useState<string | null>(null)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('commune_name').eq('id', user.id).single().then(({ data }) => {
+        if (data?.commune_name) setProfileCommune(data.commune_name as string)
+      })
+    })
+  }, [])
+
   // "Ma commune" state
   const [communeQuery, setCommuneQuery]         = useState('')
   const [communeResults, setCommuneResults]     = useState<Organisation[]>([])
@@ -2130,6 +2140,12 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
       {/* Ma commune */}
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
         <h3 className="font-bold text-slate-800 text-sm mb-3">Ma commune</h3>
+        {profileCommune && (
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
+            <Landmark size={14} className="text-indigo-500 flex-shrink-0" />
+            <span className="text-sm font-semibold text-indigo-700">{profileCommune}</span>
+          </div>
+        )}
         <div className="relative mb-3">
           <input
             type="text"
@@ -2917,6 +2933,9 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
   const [consultations, setConsultations]   = useState<LocalConsultation[]>([])
   const [loadingStats, setLoadingStats]     = useState(true)
 
+  const [showInvite, setShowInvite]         = useState(false)
+  const inviteUrl = `https://choisissons.fr?commune=${encodeURIComponent(commune.name)}`
+
   const [showForm, setShowForm]             = useState(false)
   const [formTitle, setFormTitle]           = useState('')
   const [formDescription, setFormDescription] = useState('')
@@ -3025,7 +3044,41 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
             </div>
           )}
         </div>
+        <button
+          onClick={() => setShowInvite(true)}
+          className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors text-sm font-semibold text-white"
+        >
+          <Users size={15} />
+          Inviter mes habitants
+        </button>
       </div>
+
+      {/* Modale invitation */}
+      {showInvite && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-4" onClick={() => setShowInvite(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-slate-800 text-base">Inviter mes habitants</h2>
+              <button onClick={() => setShowInvite(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Partagez ce lien avec vos habitants pour qu'ils rejoignent votre espace et participent aux votes locaux.
+            </p>
+            <div className="bg-slate-50 rounded-xl px-3 py-2.5 text-xs text-slate-600 font-mono break-all border border-slate-200">
+              {inviteUrl}
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(inviteUrl)
+                showToast('Lien copié !', 'info')
+              }}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition-colors active:scale-95"
+            >
+              Copier le lien
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="px-4 pt-4">
@@ -4021,6 +4074,16 @@ export default function App() {
         setIsLoggedIn(true)
         flushPendingVotes()
         window.history.replaceState(null, '', window.location.pathname)
+
+        // Rattachement commune via lien d'invitation
+        if (event === 'SIGNED_IN') {
+          const pendingCommune = localStorage.getItem('pending_commune')
+          if (pendingCommune) {
+            await supabase.from('profiles').update({ commune_name: pendingCommune }).eq('id', session.user.id)
+            localStorage.removeItem('pending_commune')
+            showToast(`Bienvenue ! Vous êtes rattaché à ${pendingCommune}`, 'info')
+          }
+        }
       }
       if (event === 'SIGNED_OUT') {
         setIsLoggedIn(false)
@@ -4043,6 +4106,15 @@ export default function App() {
 
   useEffect(() => {
     _toastHandler = (entry) => setToasts(prev => [...prev, entry])
+
+    // Invitation commune via ?commune=nom
+    const params = new URLSearchParams(window.location.search)
+    const communeParam = params.get('commune')
+    if (communeParam) {
+      localStorage.setItem('pending_commune', communeParam)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+
     if (window.location.pathname === '/merci') {
       window.history.replaceState(null, '', '/')
       showToast('Merci pour votre soutien ! Votre abonnement est maintenant actif.', 'info')
