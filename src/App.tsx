@@ -210,18 +210,23 @@ async function flushPendingVotes() {
   const remaining: PendingVote[] = []
   for (const v of pending) {
     try {
-      const { data, error } = await supabase.rpc('deposer_bulletin', {
-        p_proposal_id: v.proposalId,
-        p_user_hash: v.userHash,
-        p_choice: v.choice,
-      })
+      const proof = await generateVoteProof(v.proposalId, v.choice)
+      const flushParams = {
+        p_proposal_id: Number(v.proposalId),
+        p_user_hash:   v.userHash,
+        p_choice:      v.choice,
+        p_proof_hash:  proof,
+      }
+      console.log('[deposer_bulletin] flush params:', flushParams)
+      const { data, error } = await supabase.rpc('deposer_bulletin', flushParams)
+      if (error) console.log('[deposer_bulletin] flush error:', error)
       // already_voted ou succès → ne pas réessayer
       if (error || (data as { error?: string } | null)?.error === 'already_voted') {
         // drop silently
       } else if (data && (data as { error?: string }).error) {
         remaining.push(v)
       }
-    } catch { remaining.push(v) }
+    } catch (e) { console.log('[deposer_bulletin] flush exception:', e); remaining.push(v) }
   }
   savePendingVotes(remaining)
   if (remaining.length < pending.length) {
@@ -1266,17 +1271,23 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     const choiceMap: Record<VoteChoice, string> = {
       pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
+    const mappedChoice = choiceMap[choice]
+    const proof = await generateVoteProof(proposalId, mappedChoice)
+    const voteParams = {
+      p_proposal_id: Number(proposalId),
+      p_user_hash:   userHash,
+      p_choice:      mappedChoice,
+      p_proof_hash:  proof,
+    }
+    console.log('[deposer_bulletin] params:', voteParams)
 
-    const { error } = await supabase.rpc('deposer_bulletin', {
-      p_proposal_id: proposalId,
-      p_user_hash: userHash,
-      p_choice: choiceMap[choice],
-    })
+    const { error } = await supabase.rpc('deposer_bulletin', voteParams)
+    if (error) console.log('[deposer_bulletin] error:', error)
 
     if (error) {
       const pending = loadPendingVotes()
       if (!pending.some(v => v.proposalId === proposalId)) {
-        savePendingVotes([...pending, { proposalId, userHash, choice: choiceMap[choice], timestamp: Date.now() }])
+        savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
       }
       showToast('Vote sauvegardé localement. Il sera envoyé à la prochaine connexion.', 'warning')
     } else if (isRevote) {
