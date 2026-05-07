@@ -1950,6 +1950,10 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   useEffect(() => {
     let cancelled = false
     async function fetchVotes() {
+      if (!userHash) {
+        if (!cancelled) setLoadingVotes(false)
+        return
+      }
       try {
         const { data, error } = await supabase.rpc('get_my_votes', { p_user_hash: userHash })
         if (error) throw error
