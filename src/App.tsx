@@ -212,7 +212,7 @@ async function flushPendingVotes() {
     try {
       const proof = await generateVoteProof(v.proposalId, v.choice)
       const flushParams = {
-        p_proposal_id: Number(v.proposalId),
+        p_proposal_id: parseInt(String(v.proposalId), 10),
         p_user_hash:   v.userHash,
         p_choice:      v.choice,
         p_proof_hash:  proof,
@@ -1274,7 +1274,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     const mappedChoice = choiceMap[choice]
     const proof = await generateVoteProof(proposalId, mappedChoice)
     const voteParams = {
-      p_proposal_id: Number(proposalId),
+      p_proposal_id: parseInt(String(proposalId), 10),
       p_user_hash:   userHash,
       p_choice:      mappedChoice,
       p_proof_hash:  proof,
