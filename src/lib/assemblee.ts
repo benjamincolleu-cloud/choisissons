@@ -26,7 +26,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     parliamentVoteDate: '',
     votes: { pour: 0, contre: 0, blanc: 0 },
     tags: ['simplification', 'économie', 'entreprises'],
-    officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers/simplification_vie_economique',
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/dossiers/simplification_vie_economique',
   },
   {
     id: 'an-lpm-2024-2030',
@@ -38,7 +38,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     parliamentVoteDate: '',
     votes: { pour: 0, contre: 0, blanc: 0 },
     tags: ['défense', 'armée', 'sécurité'],
-    officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers/loi_programmation_militaire',
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/dossiers/programmation_militaire_2024_2030',
   },
   {
     id: 'an-acces-logement',

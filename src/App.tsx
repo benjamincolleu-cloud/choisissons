@@ -1118,7 +1118,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     parliamentVoteDate: '17 juin 2026',
     votes: { pour: 0, contre: 0, blanc: 0 },
     tags: ['retraites', 'social', 'travail'],
-    officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/textes/l16b0256_projet-loi',
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/dossiers/retraites_complementaires',
   },
 ]
 
