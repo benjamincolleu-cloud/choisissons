@@ -26,7 +26,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     parliamentVoteDate: '',
     votes: { pour: 0, contre: 0, blanc: 0 },
     tags: ['constitution', 'souveraineté', 'institutions'],
-    officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers',
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers?limit=25&searchText=souverainet%C3%A9+de+la+France',
   },
   {
     id: 'an-cybersecurite',
@@ -38,7 +38,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     parliamentVoteDate: '',
     votes: { pour: 0, contre: 0, blanc: 0 },
     tags: ['cybersécurité', 'numérique', 'résilience'],
-    officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers',
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers?limit=25&searchText=cybers%C3%A9curit%C3%A9+r%C3%A9silience',
   },
   {
     id: 'an-retention-administrative',
@@ -50,7 +50,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     parliamentVoteDate: '5 mai 2026',
     votes: { pour: 0, contre: 0, blanc: 0 },
     tags: ['sécurité', 'rétention', 'attentat'],
-    officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers',
+    officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers?limit=25&searchText=r%C3%A9tention+administrative+s%C3%A9curit%C3%A9',
   },
 ]
 
