@@ -218,7 +218,20 @@ async function flushPendingVotes() {
         p_proof_hash:  proof,
       }
       console.log('[deposer_bulletin] flush params:', flushParams)
-      const { data, error } = await supabase.rpc('deposer_bulletin', flushParams)
+      const flushRes  = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify(flushParams),
+        }
+      )
+      const data  = await flushRes.json()
+      const error = flushRes.ok ? null : data
       if (error) console.log('[deposer_bulletin] flush error:', error)
       // already_voted ou succès → ne pas réessayer
       if (error || (data as { error?: string } | null)?.error === 'already_voted') {
@@ -1281,7 +1294,20 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     }
     console.log('[deposer_bulletin] params:', voteParams)
 
-    const { error } = await supabase.rpc('deposer_bulletin', voteParams)
+    const voteRes  = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify(voteParams),
+      }
+    )
+    const voteResult = await voteRes.json()
+    const error      = voteRes.ok ? null : voteResult
     if (error) console.log('[deposer_bulletin] error:', error)
 
     if (error) {
