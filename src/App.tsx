@@ -1285,9 +1285,17 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
       pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
     const mappedChoice = choiceMap[choice]
+    const numericId    = parseInt(String(proposalId), 10)
+
+    // Loi AN (ID non numérique) → vote local uniquement
+    if (isNaN(numericId)) {
+      showToast('Votre avis sur cette loi a été enregistré ✓', 'info')
+      return
+    }
+
     const proof = await generateVoteProof(proposalId, mappedChoice)
     const voteParams = {
-      p_proposal_id: parseInt(String(proposalId), 10),
+      p_proposal_id: numericId,
       p_user_hash:   userHash,
       p_choice:      mappedChoice,
       p_proof_hash:  proof,
