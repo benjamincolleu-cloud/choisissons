@@ -411,9 +411,7 @@ function LoginScreen() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-indigo-500 mb-4 shadow-2xl">
-            <Vote size={40} className="text-white" />
-          </div>
+          <img src="/favicon.svg" alt="CHOISISSONS" className="w-20 h-20 mb-4" />
           <h1 className="text-4xl font-black text-white tracking-tight">CHOISISSONS</h1>
           <p className="text-indigo-300 mt-2 text-sm">La démocratie directe citoyenne</p>
         </div>
@@ -4584,8 +4582,11 @@ export default function App() {
       {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:w-56 xl:w-64 md:flex-col md:bg-white md:border-r md:border-slate-100 md:z-30">
         <div className="p-5 xl:p-6 border-b border-slate-100 flex-shrink-0">
-          <span className="font-black text-indigo-600 text-xl xl:text-2xl tracking-tight">CHOISISSONS</span>
-          <p className="hidden xl:block text-xs text-slate-400 mt-0.5">La démocratie participative</p>
+          <div className="flex items-center gap-2.5">
+            <img src="/favicon.svg" alt="" className="w-8 h-8 flex-shrink-0" />
+            <span className="font-black text-indigo-600 text-xl xl:text-2xl tracking-tight">CHOISISSONS</span>
+          </div>
+          <p className="hidden xl:block text-xs text-slate-400 mt-1">La démocratie participative</p>
         </div>
         <nav className="flex-1 overflow-y-auto py-3">
           {navItems.map(({ page, label, icon: Icon }) => {
