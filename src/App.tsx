@@ -1478,7 +1478,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
                 ))}
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {filtered.map(proposal => (
                   <ProposalCard
                     key={proposal.id}
@@ -1815,7 +1815,7 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash }: { onSele
               {query && <p className="text-slate-300 text-xs mt-1">pour « {query} »</p>}
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredProposals.map(proposal => (
                 <ProposalCard
                   key={proposal.id}
@@ -4326,7 +4326,7 @@ function LibraryPage() {
             )}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
             {filtered.map(entry => {
               const total     = entry.votes_pour + entry.votes_contre + entry.votes_blanc
               const pctPour   = total > 0 ? Math.round((entry.votes_pour   / total) * 100) : 0
@@ -4514,7 +4514,7 @@ export default function App() {
     return (
       <>
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-        <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
+        <div className="max-w-md mx-auto md:max-w-[900px] xl:max-w-[1100px] min-h-screen overflow-y-auto">
           <ElectedDashboard
             commune={selectedCommune}
             onBack={() => setActivePage('profile')}
@@ -4528,7 +4528,7 @@ export default function App() {
     return (
       <>
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-        <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
+        <div className="max-w-md mx-auto md:max-w-[900px] xl:max-w-[1100px] min-h-screen overflow-y-auto">
           <OrgDashboard
             org={selectedOrg}
             onBack={() => setActivePage('profile')}
@@ -4542,7 +4542,7 @@ export default function App() {
     return (
       <>
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-        <div className="max-w-md mx-auto min-h-screen overflow-y-auto">
+        <div className="max-w-md mx-auto md:max-w-[900px] xl:max-w-[1100px] min-h-screen overflow-y-auto">
           <AdminDashboard onBack={() => setActivePage('profile')} />
         </div>
       </>
@@ -4550,39 +4550,93 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto relative">
+    <div className="min-h-screen bg-slate-50">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Scrollable content area */}
-      <main className="flex-1 overflow-y-auto pb-24">
-        {activePage === 'home'    && <HomePage initialCategory={pendingCategory} userHash={userHash} />}
-        {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} />}
-        {activePage === 'profile' && (
-          <ProfilePage
-            onLogout={() => { void supabase.auth.signOut(); setActivePage('home') }}
-            onNavigateElu={handleNavigateElu}
-            onNavigateOrg={handleNavigateOrg}
-            onNavigateAdmin={() => setActivePage('admin')}
-            userHash={userHash}
-            userEmail={userEmail}
-          />
-        )}
-        {activePage === 'support'  && <SupportPage />}
-        {activePage === 'impact'   && <ImpactPage />}
-        {activePage === 'library'  && <LibraryPage />}
-      </main>
+      {/* ── Desktop sidebar ─────────────────────────────────── */}
+      <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:w-56 xl:w-64 md:flex-col md:bg-white md:border-r md:border-slate-100 md:z-30">
+        <div className="p-5 xl:p-6 border-b border-slate-100 flex-shrink-0">
+          <span className="font-black text-indigo-600 text-xl xl:text-2xl tracking-tight">CHOISISSONS</span>
+          <p className="hidden xl:block text-xs text-slate-400 mt-0.5">La démocratie participative</p>
+        </div>
+        <nav className="flex-1 overflow-y-auto py-3">
+          {navItems.map(({ page, label, icon: Icon }) => {
+            const active = activePage === page
+            return (
+              <button
+                key={page}
+                onClick={() => setActivePage(page)}
+                className={`w-full flex items-center gap-3 px-4 xl:px-5 py-3 text-sm xl:text-base text-left transition-colors ${
+                  active
+                    ? 'text-indigo-600 bg-indigo-50 font-semibold border-r-2 border-indigo-600'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                }`}
+              >
+                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <span>{label}</span>
+              </button>
+            )
+          })}
+        </nav>
+        <div className="p-4 border-t border-slate-100 flex-shrink-0">
+          <button
+            onClick={() => setShowPropose(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
+          >
+            <Plus size={16} />
+            Proposer
+          </button>
+        </div>
+      </aside>
 
-      {/* FAB */}
+      {/* ── Desktop header ───────────────────────────────────── */}
+      <header className="hidden md:flex md:fixed md:top-0 md:left-56 xl:left-64 md:right-0 md:h-14 md:bg-white md:border-b md:border-slate-100 md:z-20 md:items-center md:px-6 md:gap-4">
+        <h2 className="font-bold text-slate-800 text-base">
+          {navItems.find(n => n.page === activePage)?.label ?? ''}
+        </h2>
+        <div className="ml-auto flex items-center">
+          <button
+            onClick={() => setActivePage('profile')}
+            className="flex items-center gap-2 text-sm text-slate-600 hover:text-indigo-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-50"
+          >
+            <User size={17} />
+            <span className="max-w-[180px] truncate">{userEmail || 'Mon compte'}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* ── Content area ─────────────────────────────────────── */}
+      <div className="md:pl-56 xl:pl-64 md:pt-14">
+        <main className="pb-24 md:pb-10 md:max-w-[900px] xl:max-w-[1100px] md:mx-auto">
+          {activePage === 'home'    && <HomePage initialCategory={pendingCategory} userHash={userHash} />}
+          {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} />}
+          {activePage === 'profile' && (
+            <ProfilePage
+              onLogout={() => { void supabase.auth.signOut(); setActivePage('home') }}
+              onNavigateElu={handleNavigateElu}
+              onNavigateOrg={handleNavigateOrg}
+              onNavigateAdmin={() => setActivePage('admin')}
+              userHash={userHash}
+              userEmail={userEmail}
+            />
+          )}
+          {activePage === 'support'  && <SupportPage />}
+          {activePage === 'impact'   && <ImpactPage />}
+          {activePage === 'library'  && <LibraryPage />}
+        </main>
+      </div>
+
+      {/* ── Mobile FAB ───────────────────────────────────────── */}
       <button
         onClick={() => setShowPropose(true)}
         aria-label="Proposer une idée"
-        className="fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-300 flex items-center justify-center text-white active:scale-90 transition-all z-40"
+        className="md:hidden fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-300 flex items-center justify-center text-white active:scale-90 transition-all z-40"
       >
         <Plus size={26} />
       </button>
 
-      {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-100 z-30">
+      {/* ── Mobile bottom navigation ─────────────────────────── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-100 z-30">
         <div className="flex">
           {navItems.map(({ page, label, icon: Icon }) => {
             const active = activePage === page
