@@ -4,7 +4,7 @@
   "description": "La démocratie directe citoyenne",
   "start_url": "/?source=pwa",
   "display": "standalone",
-  "background_color": "#1e1b4b",
+  "background_color": "#ffffff",
   "theme_color": "#4338ca",
   "icons": [
     {
@@ -18,12 +18,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
     }
   ]
 }
