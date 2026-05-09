@@ -1,0 +1,16 @@
+{
+  "name": "CHOISISSONS",
+  "short_name": "CHOISISSONS",
+  "description": "La démocratie directe citoyenne",
+  "display": "standalone",
+  "start_url": "/?source=pwa",
+  "background_color": "#1e1b4b",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}

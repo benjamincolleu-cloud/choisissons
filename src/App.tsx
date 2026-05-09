@@ -4462,7 +4462,26 @@ export default function App() {
         setUserEmail(session.user.email ?? '')
         setIsLoggedIn(true)
         flushPendingVotes()
+        setIsLoading(false)
+        return
       }
+      // iOS PWA standalone: getSession() may not find the session saved in Safari context —
+      // try restoring manually from the known storage key
+      try {
+        const saved = localStorage.getItem('choisissons-auth')
+        if (saved) {
+          const parsed = JSON.parse(saved) as { access_token?: string; refresh_token?: string }
+          if (parsed?.access_token && parsed?.refresh_token) {
+            await supabase.auth.setSession({
+              access_token: parsed.access_token,
+              refresh_token: parsed.refresh_token,
+            })
+            // onAuthStateChange will fire SIGNED_IN and complete the login flow
+            setIsLoading(false)
+            return
+          }
+        }
+      } catch { /* malformed storage entry — ignore */ }
       setIsLoading(false)
     })
 
