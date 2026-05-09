@@ -42,14 +42,6 @@ interface Proposal {
   blockchainProof?: string
 }
 
-interface MockUser {
-  name: string
-  commune: string
-  avatar: string
-  votesCount: number
-  proposalsCount: number
-}
-
 // ── Supabase row shape ─────────────────────────────────────────
 interface ProposalRow {
   id: string
@@ -176,14 +168,6 @@ const PROPOSALS: Proposal[] = [
     tags: ['transparence', 'démocratie', 'budget'],
   },
 ]
-
-const MOCK_USER: MockUser = {
-  name: 'Laetitia Benjamin',
-  commune: 'Paris 11e',
-  avatar: 'LB',
-  votesCount: 7,
-  proposalsCount: 2,
-}
 
 // ── Utilities ──────────────────────────────────────────────────
 
@@ -490,6 +474,10 @@ function LoginScreen() {
                 'Recevoir mon lien de connexion'
               )}
             </button>
+            <p className="text-center text-indigo-300/80 text-xs mt-3 leading-relaxed">
+              Si vous avez déjà un compte, entrez votre email pour recevoir un nouveau lien de connexion.
+              Le lien est valable 24h et fonctionne une seule fois.
+            </p>
           </>
         )}
 
@@ -1942,6 +1930,20 @@ interface MyProposalRecord {
   supports?: number
 }
 
+function emailToDisplayName(email: string): string {
+  const local = email.split('@')[0] ?? email
+  return local
+    .replace(/[._-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function nameToInitials(name: string): string {
+  return name.split(' ').filter(Boolean).slice(0, 2).map(w => w.charAt(0).toUpperCase()).join('')
+}
+
 function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, userHash, userEmail }: {
   onLogout: () => void
   onNavigateElu: (commune: Organisation) => void
@@ -1960,10 +1962,17 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   const [myProposals, setMyProposals]         = useState<MyProposalRecord[]>([])
   const [loadingMyProps, setLoadingMyProps]   = useState(true)
 
+  const [fullName, setFullName]             = useState<string>('')
   const [profileCommune, setProfileCommune] = useState<string | null>(null)
+
+  const displayName  = fullName || emailToDisplayName(userEmail)
+  const userInitials = nameToInitials(displayName)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
+      const rawName = (user.user_metadata?.full_name as string | undefined)?.trim() ?? ''
+      if (rawName) setFullName(rawName)
       supabase.from('profiles').select('commune_name').eq('id', user.id).single().then(({ data }) => {
         if (data?.commune_name) setProfileCommune(data.commune_name as string)
       })
@@ -2164,15 +2173,15 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-indigo-500 flex items-center justify-center text-xl font-black shadow-lg flex-shrink-0">
-              {MOCK_USER.avatar}
+              {userInitials || <User size={24} />}
             </div>
             <div>
-              <p className="font-black text-lg leading-tight">{MOCK_USER.name}</p>
-              <p className="text-indigo-200 text-sm mt-0.5">{MOCK_USER.commune}</p>
+              <p className="font-black text-lg leading-tight">{displayName}</p>
+              <p className="text-indigo-200 text-sm mt-0.5">{userEmail}</p>
               <div className="flex gap-3 mt-2 text-xs text-indigo-300">
-                <span>{MOCK_USER.votesCount} votes</span>
+                <span>{votedProposals.length} votes</span>
                 <span>·</span>
-                <span>{MOCK_USER.proposalsCount} propositions</span>
+                <span>{myProposals.length} propositions</span>
               </div>
             </div>
           </div>
