@@ -16,7 +16,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────
 type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
-type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin'
+type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune'
 
 interface Argument {
   id: string
@@ -1534,6 +1534,8 @@ interface Organisation {
   type: 'commune' | 'ong' | 'media'
   description: string
   population?: number
+  code_insee?: string
+  abonnement?: boolean
 }
 
 const MOCK_ORGANISATIONS: Organisation[] = [
@@ -1944,11 +1946,12 @@ function nameToInitials(name: string): string {
   return name.split(' ').filter(Boolean).slice(0, 2).map(w => w.charAt(0).toUpperCase()).join('')
 }
 
-function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, userHash, userEmail }: {
+function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, onNavigateCommune, userHash, userEmail }: {
   onLogout: () => void
   onNavigateElu: (commune: Organisation) => void
   onNavigateOrg: (org: Organisation) => void
   onNavigateAdmin: () => void
+  onNavigateCommune: (commune: Organisation, role: 'member' | 'admin') => void
   userHash: string
   userEmail: string
 }) {
@@ -1988,6 +1991,8 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   const [joinedCommuneIds, setJoinedCommuneIds] = useState<Set<string>>(new Set())
   const [joinedCommunes, setJoinedCommunes]     = useState<Organisation[]>([])
   const [joinedOrgs, setJoinedOrgs]             = useState<Organisation[]>([])
+  const [communeRoles, setCommuneRoles]         = useState<Record<string, 'member' | 'admin'>>({})
+
 
 
   // Fetch "Mes votes" via RPC get_my_votes
@@ -2053,23 +2058,30 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
     return () => { cancelled = true }
   }, [userHash])
 
-  // Load joined communes on mount
+  // Load joined organisations + roles on mount
   useEffect(() => {
     let cancelled = false
     async function fetchJoined() {
       try {
         const { data, error } = await supabase
           .from('citizen_organisations')
-          .select('organisation_id')
+          .select('organisation_id, role')
           .eq('user_hash', userHash)
         if (error) throw error
         if (!cancelled && data && data.length > 0) {
-          const ids = data.map((r: { organisation_id: string }) => r.organisation_id)
+          const rows = data as { organisation_id: string; role?: string }[]
+          const ids = rows.map(r => r.organisation_id)
           setJoinedCommuneIds(new Set(ids))
+          // Build role map (default: 'member' if column absent)
+          const roleMap: Record<string, 'member' | 'admin'> = {}
+          for (const r of rows) {
+            roleMap[r.organisation_id] = r.role === 'admin' ? 'admin' : 'member'
+          }
+          setCommuneRoles(roleMap)
           // Fetch full org objects for all types in one query, then split
           const { data: orgData } = await supabase
             .from('organisations')
-            .select('id,name,type,description,population')
+            .select('id,name,type,description,population,code_insee,abonnement')
             .in('id', ids)
           if (!cancelled) {
             const orgs = (orgData && orgData.length > 0)
@@ -2116,12 +2128,14 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
 
   async function handleJoinCommune(orgId: string) {
     setJoinedCommuneIds(prev => { const s = new Set(prev); s.add(orgId); return s })
+    setCommuneRoles(prev => ({ ...prev, [orgId]: 'member' }))
     const org = communeResults.find(o => o.id === orgId)
     if (org) setJoinedCommunes(prev => [...prev, org])
     try {
       const { error } = await supabase.from('citizen_organisations').insert({
         user_hash: userHash,
         organisation_id: orgId,
+        role: 'member',
       })
       if (error) throw error
     } catch {
@@ -2332,26 +2346,45 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         )}
       </div>
 
-      {/* Accès tableau de bord élu — abonnement Commune requis */}
-      {joinedCommunes.length > 0 && userPlan === 'commune' && (
-        <div className="mb-4">
-          {joinedCommunes.map(commune => (
-            <button
-              key={commune.id}
-              onClick={() => onNavigateElu(commune)}
-              className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-white active:scale-95 transition-all shadow-sm"
-              style={{ backgroundColor: '#0c447c' }}
-            >
-              <div className="flex items-center gap-3">
-                <Landmark size={16} className="text-blue-200 flex-shrink-0" />
-                <div className="text-left">
-                  <p className="text-sm font-semibold leading-tight">Tableau de bord élu</p>
-                  <p className="text-blue-200 text-xs mt-0.5">{commune.name}</p>
-                </div>
+      {/* Bouton "Voir ma commune" — rôle member ou admin */}
+      {joinedCommunes.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {joinedCommunes.map(commune => {
+            const role = communeRoles[commune.id] ?? 'member'
+            return (
+              <div key={commune.id} className="space-y-2">
+                <button
+                  onClick={() => onNavigateCommune(commune, role)}
+                  className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-indigo-600 text-white active:scale-95 transition-all shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <Landmark size={16} className="text-indigo-200 flex-shrink-0" />
+                    <div className="text-left">
+                      <p className="text-sm font-semibold leading-tight">Voir ma commune</p>
+                      <p className="text-indigo-200 text-xs mt-0.5">{commune.name}</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-indigo-200 flex-shrink-0" />
+                </button>
+                {role === 'admin' && (
+                  <button
+                    onClick={() => onNavigateElu(commune)}
+                    className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-white active:scale-95 transition-all shadow-sm"
+                    style={{ backgroundColor: '#0c447c' }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Shield size={16} className="text-blue-200 flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="text-sm font-semibold leading-tight">Tableau de bord élu</p>
+                        <p className="text-blue-200 text-xs mt-0.5">{commune.name}</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-blue-200 flex-shrink-0" />
+                  </button>
+                )}
               </div>
-              <ChevronRight size={16} className="text-blue-200 flex-shrink-0" />
-            </button>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -4510,14 +4543,250 @@ function LibraryPage() {
   )
 }
 
+// ── Commune Page ───────────────────────────────────────────────
+function CommunePage({ commune, userRole, userHash, onBack }: {
+  commune: Organisation
+  userRole: 'member' | 'admin'
+  userHash: string
+  onBack: () => void
+}) {
+  const [tab, setTab] = useState<'consultations' | 'archives' | 'actus'>('consultations')
+  const [activeProposals,   setActiveProposals]   = useState<Proposal[]>([])
+  const [archivedProposals, setArchivedProposals] = useState<Proposal[]>([])
+  const [loading,           setLoading]           = useState(true)
+  const [agoraProposal,     setAgoraProposal]     = useState<Proposal | null>(null)
+  const [votingProposal,    setVotingProposal]    = useState<Proposal | null>(null)
+  const [votedChoices,      setVotedChoices]      = useState<Record<string, VoteChoice>>({})
+  const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchProposals() {
+      try {
+        const [activeRes, archiveRes] = await Promise.all([
+          supabase
+            .from('proposals')
+            .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof')
+            .eq('organisation_id', commune.id)
+            .in('status', ['seedling', 'review', 'voting'])
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('proposals')
+            .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof')
+            .eq('organisation_id', commune.id)
+            .in('status', ['adopted', 'rejected', 'closed'])
+            .order('created_at', { ascending: false }),
+        ])
+        if (!cancelled) {
+          if (activeRes.data)   setActiveProposals((activeRes.data as ProposalRow[]).map(mapRowToProposal))
+          if (archiveRes.data)  setArchivedProposals((archiveRes.data as ProposalRow[]).map(mapRowToProposal))
+        }
+      } catch { /* fallback vide */ } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchProposals()
+    return () => { cancelled = true }
+  }, [commune.id])
+
+  const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) => {
+    setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
+    setActiveProposals(prev => prev.map(p => {
+      if (p.id !== proposalId) return p
+      const v = { ...p.votes, [choice]: p.votes[choice] + 1 }
+      if (oldChoice) v[oldChoice] = Math.max(0, v[oldChoice] - 1)
+      return { ...p, votes: v }
+    }))
+    setVotingProposal(null)
+    setAgoraProposal(null)
+    setResultsProposalId(proposalId)
+  }, [])
+
+  void userRole // disponible pour futures restrictions d'affichage
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div className="bg-indigo-700 px-5 pt-10 pb-6 text-white">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-indigo-200 text-xs font-medium mb-5 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={14} />
+          Retour à Mon Compte
+        </button>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <span className="inline-block text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/50 text-indigo-100 mb-2">
+              Commune partenaire CHOISISSONS
+            </span>
+            <h1 className="text-xl font-black leading-tight">{commune.name}</h1>
+            {commune.code_insee && (
+              <p className="text-indigo-300 text-xs mt-0.5">Code INSEE : {commune.code_insee}</p>
+            )}
+          </div>
+          {commune.population != null && (
+            <div className="text-right flex-shrink-0">
+              <p className="text-2xl font-black">{commune.population.toLocaleString('fr-FR')}</p>
+              <p className="text-indigo-300 text-xs">habitants</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-200 mx-4 mt-4 rounded-xl p-1">
+        {([
+          { key: 'consultations' as const, label: 'Consultations' },
+          { key: 'archives'      as const, label: 'Archives'      },
+          { key: 'actus'         as const, label: 'Actualités'    },
+        ]).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+              tab === t.key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-4">
+        {/* Onglet 1 — Consultations actives */}
+        {tab === 'consultations' && (
+          loading ? (
+            <div className="space-y-4">
+              {[1, 2].map(i => (
+                <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 animate-pulse">
+                  <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
+                  <div className="h-3 bg-slate-100 rounded w-full" />
+                </div>
+              ))}
+            </div>
+          ) : activeProposals.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
+              <Vote size={32} className="text-slate-200 mx-auto mb-3" />
+              <p className="text-sm text-slate-400 font-medium">Aucune consultation en cours</p>
+              <p className="text-xs text-slate-300 mt-1">Les prochaines consultations apparaîtront ici</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {activeProposals.map(proposal => (
+                <ProposalCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  onOpen={() => setAgoraProposal(proposal)}
+                  currentVote={votedChoices[proposal.id]}
+                  onRevote={() => setVotingProposal(proposal)}
+                />
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Onglet 2 — Archives */}
+        {tab === 'archives' && (
+          loading ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 animate-pulse">
+                  <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
+                  <div className="h-2 bg-slate-100 rounded w-full" />
+                </div>
+              ))}
+            </div>
+          ) : archivedProposals.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
+              <BookOpen size={32} className="text-slate-200 mx-auto mb-3" />
+              <p className="text-sm text-slate-400 font-medium">Aucune consultation archivée</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {archivedProposals.map(p => {
+                const total     = p.votes.pour + p.votes.contre + p.votes.blanc
+                const pourPct   = total > 0 ? Math.round((p.votes.pour   / total) * 100) : 0
+                const contrePct = total > 0 ? Math.round((p.votes.contre / total) * 100) : 0
+                const blancPct  = 100 - pourPct - contrePct
+                return (
+                  <div key={p.id} className="bg-white rounded-2xl border border-slate-100 p-4">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="text-sm font-semibold text-slate-800 flex-1 leading-snug">{p.title}</h3>
+                      <StageBadge stage={p.stage} />
+                    </div>
+                    <p className="text-xs text-slate-400 mb-3">
+                      {p.date} · {total.toLocaleString('fr-FR')} vote{total !== 1 ? 's' : ''}
+                    </p>
+                    {total > 0 ? (
+                      <>
+                        <div className="flex h-2 rounded-full overflow-hidden mb-1.5">
+                          <div className="bg-green-500" style={{ width: `${pourPct}%` }} />
+                          <div className="bg-red-400"   style={{ width: `${contrePct}%` }} />
+                          <div className="bg-slate-200" style={{ width: `${blancPct}%` }} />
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-green-600 font-semibold">Pour {pourPct}%</span>
+                          <span className="text-slate-400">Blanc {blancPct}%</span>
+                          <span className="text-red-500 font-semibold">Contre {contrePct}%</span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-300 italic">Aucun vote enregistré</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        )}
+
+        {/* Onglet 3 — Actualités (placeholder) */}
+        {tab === 'actus' && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
+            <Newspaper size={32} className="text-slate-200 mx-auto mb-3" />
+            <p className="text-sm text-slate-500 font-medium">Les actualités de votre commune arrivent bientôt</p>
+            <p className="text-xs text-slate-300 mt-1">Restez informé des décisions et événements locaux</p>
+          </div>
+        )}
+      </div>
+
+      {/* Modales voting */}
+      {agoraProposal && !votingProposal && (
+        <AgoraModal
+          proposal={agoraProposal}
+          onVote={() => setVotingProposal(agoraProposal)}
+          onClose={() => setAgoraProposal(null)}
+          hasVoted={agoraProposal.id in votedChoices}
+        />
+      )}
+      {votingProposal && (
+        <VotingBooth
+          proposal={votingProposal}
+          onVoted={(choice) => handleVoted(votingProposal.id, choice, votedChoices[votingProposal.id])}
+          onClose={() => setVotingProposal(null)}
+        />
+      )}
+      {resultsProposalId && (
+        <ResultsModal
+          proposalId={resultsProposalId}
+          onClose={() => setResultsProposalId(null)}
+        />
+      )}
+    </div>
+  )
+}
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn]         = useState(false)
   const [isLoading, setIsLoading]           = useState(true)
   const [activePage, setActivePage]         = useState<NavPage>('home')
   const [showPropose, setShowPropose]       = useState(false)
   const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
-  const [selectedCommune, setSelectedCommune] = useState<Organisation | null>(null)
-  const [selectedOrg, setSelectedOrg]         = useState<Organisation | null>(null)
+  const [selectedCommune, setSelectedCommune]           = useState<Organisation | null>(null)
+  const [selectedOrg, setSelectedOrg]                   = useState<Organisation | null>(null)
+  const [selectedCommunePage, setSelectedCommunePage]   = useState<Organisation | null>(null)
+  const [communePageRole, setCommunePageRole]           = useState<'member' | 'admin'>('member')
   const [userHash, setUserHash]               = useState<string>('')
   const [userEmail, setUserEmail]             = useState<string>('')
   const [toasts, setToasts]                   = useState<ToastEntry[]>([])
@@ -4620,6 +4889,12 @@ export default function App() {
     setActivePage('org')
   }
 
+  const handleNavigateCommune = (commune: Organisation, role: 'member' | 'admin') => {
+    setSelectedCommunePage(commune)
+    setCommunePageRole(role)
+    setActivePage('commune')
+  }
+
   const navItems: { page: NavPage; label: string; icon: ElementType }[] = [
     { page: 'home',    label: 'Accueil',    icon: Home },
     { page: 'explore', label: 'Explorer',   icon: Compass },
@@ -4667,6 +4942,22 @@ export default function App() {
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
         <div className="max-w-md mx-auto md:max-w-[900px] xl:max-w-[1100px] min-h-screen overflow-y-auto">
           <AdminDashboard onBack={() => setActivePage('profile')} />
+        </div>
+      </>
+    )
+  }
+
+  if (activePage === 'commune' && selectedCommunePage) {
+    return (
+      <>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        <div className="max-w-md mx-auto md:max-w-[900px] xl:max-w-[1100px] min-h-screen overflow-y-auto">
+          <CommunePage
+            commune={selectedCommunePage}
+            userRole={communePageRole}
+            userHash={userHash}
+            onBack={() => setActivePage('profile')}
+          />
         </div>
       </>
     )
@@ -4742,6 +5033,7 @@ export default function App() {
               onNavigateElu={handleNavigateElu}
               onNavigateOrg={handleNavigateOrg}
               onNavigateAdmin={() => setActivePage('admin')}
+              onNavigateCommune={handleNavigateCommune}
               userHash={userHash}
               userEmail={userEmail}
             />
