@@ -2346,27 +2346,37 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         )}
       </div>
 
-      {/* Bouton "Voir ma commune" — rôle member ou admin */}
+      {/* Bouton "Voir ma commune" — rôle member ou admin, commune abonnée uniquement */}
       {joinedCommunes.length > 0 && (
         <div className="mb-3 space-y-2">
           {joinedCommunes.map(commune => {
             const role = communeRoles[commune.id] ?? 'member'
             return (
               <div key={commune.id} className="space-y-2">
-                <button
-                  onClick={() => onNavigateCommune(commune, role)}
-                  className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-indigo-600 text-white active:scale-95 transition-all shadow-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <Landmark size={16} className="text-indigo-200 flex-shrink-0" />
+                {commune.abonnement ? (
+                  <button
+                    onClick={() => onNavigateCommune(commune, role)}
+                    className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-indigo-600 text-white active:scale-95 transition-all shadow-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Landmark size={16} className="text-indigo-200 flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="text-sm font-semibold leading-tight">Voir ma commune</p>
+                        <p className="text-indigo-200 text-xs mt-0.5">{commune.name}</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-indigo-200 flex-shrink-0" />
+                  </button>
+                ) : (
+                  <div className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-slate-100 text-slate-400">
+                    <Landmark size={16} className="flex-shrink-0" />
                     <div className="text-left">
-                      <p className="text-sm font-semibold leading-tight">Voir ma commune</p>
-                      <p className="text-indigo-200 text-xs mt-0.5">{commune.name}</p>
+                      <p className="text-sm font-medium leading-tight">{commune.name}</p>
+                      <p className="text-xs mt-0.5">Commune non encore abonnée à CHOISISSONS</p>
                     </div>
                   </div>
-                  <ChevronRight size={16} className="text-indigo-200 flex-shrink-0" />
-                </button>
-                {role === 'admin' && (
+                )}
+                {role === 'admin' && commune.abonnement && (
                   <button
                     onClick={() => onNavigateElu(commune)}
                     className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-white active:scale-95 transition-all shadow-sm"
