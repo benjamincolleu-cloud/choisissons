@@ -410,11 +410,11 @@ function LoginScreen() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '32px' }}>
-          <img src="/logo.png" alt="Logo CHOISISSONS" style={{ height: '100px', width: 'auto' }} />
-          <div style={{ textAlign: 'left' }}>
-            <h1 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'white', margin: 0 }}>CHOISISSONS</h1>
-            <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>La démocratie directe citoyenne</p>
+        <div className="flex items-center justify-center gap-5 mb-8">
+          <img src="/logo.png" alt="" className="h-24 w-auto" />
+          <div className="text-left">
+            <h1 className="text-4xl font-black text-white m-0">CHOISISSONS</h1>
+            <p className="text-white/70 m-0 text-sm">La démocratie directe citoyenne</p>
           </div>
         </div>
 
@@ -4584,9 +4584,9 @@ export default function App() {
       {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:w-56 xl:w-64 md:flex-col md:bg-white md:border-r md:border-slate-100 md:z-30">
         <div className="p-5 xl:p-6 border-b border-slate-100 flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="" className="h-9 w-auto flex-shrink-0" />
-            <span className="font-black text-indigo-600 text-xl xl:text-2xl tracking-tight">CHOISISSONS</span>
+          <div className="flex items-center gap-4">
+            <img src="/logo.png" alt="" className="h-12 w-auto" />
+            <span className="font-bold text-indigo-600 text-xl">CHOISISSONS</span>
           </div>
           <p className="hidden xl:block text-xs text-slate-400 mt-1">La démocratie participative</p>
         </div>
