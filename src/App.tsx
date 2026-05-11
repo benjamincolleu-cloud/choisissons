@@ -4603,6 +4603,7 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
   }, [])
 
   void userRole // disponible pour futures restrictions d'affichage
+  void userHash
 
   return (
     <div className="min-h-screen bg-slate-50">
