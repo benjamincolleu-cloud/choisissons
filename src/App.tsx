@@ -410,11 +410,11 @@ function LoginScreen() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-4 mb-10">
-          <img src="/logo.png" alt="" className="h-20 w-auto flex-shrink-0" />
-          <div>
-            <h1 className="text-4xl font-black text-white tracking-tight">CHOISISSONS</h1>
-            <p className="text-indigo-300 mt-1 text-sm">La démocratie directe citoyenne</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '32px' }}>
+          <img src="/logo.png" alt="Logo CHOISISSONS" style={{ height: '100px', width: 'auto' }} />
+          <div style={{ textAlign: 'left' }}>
+            <h1 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'white', margin: 0 }}>CHOISISSONS</h1>
+            <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>La démocratie directe citoyenne</p>
           </div>
         </div>
 
