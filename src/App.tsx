@@ -2133,31 +2133,100 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
     cgu: {
       title: "Conditions Générales d'Utilisation",
       content: (
-        <p className="text-sm text-slate-600 leading-relaxed">
-          CHOISISSONS est une plateforme de démocratie directe citoyenne. En utilisant ce service,
-          vous acceptez de voter de manière sincère et personnelle. Les votes sont anonymes et
-          chiffrés. Version prototype — usage non contraignant.
-        </p>
+        <div className="space-y-4 text-sm text-slate-600 leading-relaxed">
+          <p><span className="font-bold text-slate-800">Version Alpha — Mai 2026</span></p>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">1. Objet</p>
+            <p>CHOISISSONS est une plateforme de démocratie directe citoyenne permettant aux utilisateurs de consulter, soutenir et voter des propositions citoyennes. Cette version est un prototype à usage non contraignant, destiné à tester l'expérience utilisateur.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">2. Accès au service</p>
+            <p>L'accès est libre et gratuit en version Citoyen. L'utilisation est réservée aux personnes physiques majeures résidant en France. En accédant à la plateforme, vous acceptez les présentes CGU.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">3. Comportement attendu</p>
+            <p>Vous vous engagez à voter de manière sincère et personnelle, à ne pas créer de comptes multiples pour biaiser les votes, à ne pas publier de contenu illégal, haineux, diffamatoire ou contraire à la Constitution française.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">4. Propriété intellectuelle</p>
+            <p>Le code source est open-source (licence à définir). Les contenus générés par les utilisateurs restent leur propriété. En les publiant sur CHOISISSONS, vous accordez une licence non exclusive d'affichage à la plateforme.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">5. Limitation de responsabilité</p>
+            <p>CHOISISSONS est une plateforme de démocratie consultative. Les votes n'ont aucune valeur juridique contraignante dans cette version alpha. La plateforme ne peut être tenue responsable des décisions prises sur la base de ces votes.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">6. Modification des CGU</p>
+            <p>Ces CGU peuvent être modifiées à tout moment. Les utilisateurs seront informés par notification dans l'application.</p>
+          </div>
+          <p className="text-xs text-slate-400 pt-2">Contact : contact@choisissons.fr</p>
+        </div>
       ),
     },
     privacy: {
       title: 'Politique de confidentialité',
       content: (
-        <p className="text-sm text-slate-600 leading-relaxed">
-          Nous ne collectons aucune donnée personnelle identifiable. Votre identité est dissociée
-          de votre vote par chiffrement SHA-256 avant tout enregistrement. Conformément au RGPD,
-          vous pouvez demander la suppression de vos données à{' '}
-          <span className="text-indigo-600 font-medium">contact@choisissons.fr</span>
-        </p>
+        <div className="space-y-4 text-sm text-slate-600 leading-relaxed">
+          <p><span className="font-bold text-slate-800">Conforme au RGPD — Version Alpha Mai 2026</span></p>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">1. Responsable du traitement</p>
+            <p>Benjamin Colleu — contact@choisissons.fr. Structure juridique en cours de création (micro-entreprise / association loi 1901).</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">2. Données collectées</p>
+            <p>CHOISISSONS collecte uniquement : un identifiant de session anonyme généré localement sur votre appareil, et les empreintes SHA-256 de vos votes (irréversibles, non liées à votre identité). Aucun nom, prénom, adresse e-mail ou donnée personnelle n'est collecté dans cette version.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">3. Finalité du traitement</p>
+            <p>Les données sont utilisées exclusivement pour garantir l'unicité des votes et afficher les statistiques agrégées. Elles ne sont jamais vendues, partagées ou utilisées à des fins publicitaires.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">4. Hébergement</p>
+            <p>Les données sont hébergées sur Supabase (serveur Paris — West EU) et Vercel (CDN européen). Aucun transfert hors Union Européenne.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">5. Durée de conservation</p>
+            <p>Les empreintes de vote sont conservées le temps de la session de vote. L'identifiant de session local peut être réinitialisé à tout moment depuis Mon Compte.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">6. Vos droits</p>
+            <p>Conformément au RGPD, vous disposez d'un droit d'accès, de rectification et d'effacement. Pour exercer ces droits : <span className="text-indigo-600 font-medium">contact@choisissons.fr</span>. Vous pouvez également introduire une réclamation auprès de la CNIL (www.cnil.fr).</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">7. Cookies</p>
+            <p>CHOISISSONS n'utilise pas de cookies publicitaires ou de traçage. Seul un cookie technique de session est utilisé pour le bon fonctionnement de l'application.</p>
+          </div>
+        </div>
       ),
     },
     legal: {
       title: 'Mentions légales',
       content: (
-        <div className="space-y-2 text-sm text-slate-600">
-          <p><span className="font-semibold text-slate-700">Éditeur :</span> Association CHOISISSONS (en cours de création)</p>
-          <p><span className="font-semibold text-slate-700">Hébergement :</span> Vercel Inc. / Supabase (West EU Paris)</p>
-          <p><span className="font-semibold text-slate-700">Directeur de publication :</span> Benjamin Colleu</p>
+        <div className="space-y-4 text-sm text-slate-600 leading-relaxed">
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">Éditeur de la plateforme</p>
+            <p>Benjamin Colleu<br/>Micro-entrepreneur — SIRET en cours d'enregistrement<br/>Adresse : Dordogne (24), France<br/>Contact : contact@choisissons.fr</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">Directeur de la publication</p>
+            <p>Benjamin Colleu</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">Hébergement</p>
+            <p>Frontend : Vercel Inc. — 340 Pine Street, Suite 1600, San Francisco, CA 94104, USA<br/>Base de données : Supabase — serveur région West EU (Paris, France)</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">Propriété intellectuelle</p>
+            <p>Le nom et le logo CHOISISSONS sont des marques en cours de dépôt à l'INPI. Toute reproduction sans autorisation est interdite.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">Version</p>
+            <p>Alpha — Mai 2026. Usage consultatif, non contraignant. Les votes n'ont pas de valeur juridique dans cette version.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700 mb-1">Médiation</p>
+            <p>En cas de litige, vous pouvez recourir à la médiation de la consommation ou saisir les juridictions françaises compétentes.</p>
+          </div>
         </div>
       ),
     },
