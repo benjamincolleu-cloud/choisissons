@@ -410,10 +410,12 @@ function LoginScreen() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="text-center mb-10">
-          <img src="/logo.png" alt="CHOISISSONS" className="w-20 h-20 mb-4" />
-          <h1 className="text-4xl font-black text-white tracking-tight">CHOISISSONS</h1>
-          <p className="text-indigo-300 mt-2 text-sm">La démocratie directe citoyenne</p>
+        <div className="flex items-center justify-center gap-4 mb-10">
+          <img src="/logo.png" alt="" className="h-20 w-auto flex-shrink-0" />
+          <div>
+            <h1 className="text-4xl font-black text-white tracking-tight">CHOISISSONS</h1>
+            <p className="text-indigo-300 mt-1 text-sm">La démocratie directe citoyenne</p>
+          </div>
         </div>
 
         {/* Value props */}
@@ -4583,7 +4585,7 @@ export default function App() {
       <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:w-56 xl:w-64 md:flex-col md:bg-white md:border-r md:border-slate-100 md:z-30">
         <div className="p-5 xl:p-6 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="" className="w-8 h-8 flex-shrink-0" />
+            <img src="/logo.png" alt="" className="h-9 w-auto flex-shrink-0" />
             <span className="font-black text-indigo-600 text-xl xl:text-2xl tracking-tight">CHOISISSONS</span>
           </div>
           <p className="hidden xl:block text-xs text-slate-400 mt-1">La démocratie participative</p>
