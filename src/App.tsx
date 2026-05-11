@@ -411,7 +411,7 @@ function LoginScreen() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex items-center justify-center gap-5 mb-8">
-          <img src="/logo.png" alt="" className="h-24 w-auto" />
+          <img src="/logo.png" alt="" className="h-32 w-auto" />
           <div className="text-left">
             <h1 className="text-4xl font-black text-white m-0">CHOISISSONS</h1>
             <p className="text-white/70 m-0 text-sm">La démocratie directe citoyenne</p>
