@@ -410,8 +410,12 @@ function LoginScreen() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="flex items-center justify-center mb-8">
+        <div className="flex items-center justify-center gap-4 mb-8">
           <img src="/logo.png" alt="" className="h-32 w-auto" />
+          <div className="text-left">
+            <h1 className="text-4xl font-black text-white m-0">CHOISISSONS</h1>
+            <p className="text-white/70 m-0 text-sm">La démocratie directe citoyenne</p>
+          </div>
         </div>
 
         {/* Value props */}
