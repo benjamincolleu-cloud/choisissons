@@ -1656,7 +1656,7 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash }: { onSele
     setResultsProposalId(proposalId)
   }
 
-  const EXPLORE_CATEGORIES = ['Toutes', 'Économie', 'Social', 'Numérique', 'Institutions', 'Environnement']
+  const EXPLORE_CATEGORIES = ['Toutes', 'Économie', 'Social', 'Numérique', 'Institutions', 'Environnement', 'Justice']
 
   const STATUS_TABS: { key: Stage; label: string }[] = [
     { key: 'voting',   label: 'En vote'    },
@@ -1956,6 +1956,8 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   const [showLegal, setShowLegal]         = useState<string | null>(null)
   const [notifEnabled, setNotifEnabled]   = useState(true)
   const [language, setLanguage]           = useState('FR')
+  // TODO: remplacer par la vraie valeur issue de Stripe/Supabase (table subscriptions)
+  const [userPlan, setUserPlan] = useState<'citoyen' | 'commune' | 'ong' | 'media'>('citoyen')
 
   const [votedProposals, setVotedProposals]   = useState<VoteRecord[]>([])
   const [loadingVotes, setLoadingVotes]       = useState(true)
@@ -2261,8 +2263,8 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         )}
       </div>
 
-      {/* Accès tableau de bord élu */}
-      {joinedCommunes.length > 0 && (
+      {/* Accès tableau de bord élu — abonnement Commune requis */}
+      {joinedCommunes.length > 0 && userPlan === 'commune' && (
         <div className="mb-4">
           {joinedCommunes.map(commune => (
             <button
@@ -2284,10 +2286,16 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         </div>
       )}
 
-      {/* Accès tableau de bord ONG / Média */}
-      {joinedOrgs.length > 0 && (
+      {/* Accès tableau de bord ONG / Média — abonnement correspondant requis */}
+      {joinedOrgs.filter(o =>
+        (o.type === 'ong' && userPlan === 'ong') ||
+        (o.type === 'media' && userPlan === 'media')
+      ).length > 0 && (
         <div className="mb-4 space-y-2">
-          {joinedOrgs.map(org => {
+          {joinedOrgs.filter(o =>
+            (o.type === 'ong' && userPlan === 'ong') ||
+            (o.type === 'media' && userPlan === 'media')
+          ).map(org => {
             const bgColor = org.type === 'ong' ? '#854f0b' : '#334155'
             const icon    = org.type === 'ong' ? <Users size={16} className="text-amber-200 flex-shrink-0" /> : <Newspaper size={16} className="text-slate-300 flex-shrink-0" />
             const sub     = org.type === 'ong' ? 'ONG / Association' : 'Média'
@@ -2440,6 +2448,23 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
           </div>
           <ChevronRight size={16} className="text-slate-500" />
         </button>
+      )}
+
+      {/* DEV ONLY — simulateur de plan (retiré en prod) */}
+      {import.meta.env.DEV && (
+        <div className="mb-4 bg-yellow-50 border border-yellow-300 rounded-2xl p-4">
+          <p className="text-xs font-bold text-yellow-700 uppercase tracking-wider mb-2">⚙ Dev — Simuler le plan</p>
+          <select
+            value={userPlan}
+            onChange={e => setUserPlan(e.target.value as 'citoyen' | 'commune' | 'ong' | 'media')}
+            className="w-full text-sm bg-white border border-yellow-300 rounded-xl px-3 py-2 outline-none"
+          >
+            <option value="citoyen">Citoyen (défaut)</option>
+            <option value="commune">Commune</option>
+            <option value="ong">ONG / Association</option>
+            <option value="media">Média</option>
+          </select>
+        </div>
       )}
 
       {/* Déconnexion */}
@@ -3576,6 +3601,7 @@ const IMPACT_CATEGORIES: { name: string; color: string }[] = [
   { name: 'Numérique',     color: 'bg-purple-400' },
   { name: 'Institutions',  color: 'bg-indigo-400' },
   { name: 'Environnement', color: 'bg-green-400'  },
+  { name: 'Justice',       color: 'bg-violet-400' },
 ]
 
 function ImpactPage() {
@@ -3694,7 +3720,7 @@ function ProposeModal({ onClose }: { onClose: () => void }) {
   const [category, setCategory]       = useState('')
   const [submitted, setSubmitted]     = useState(false)
 
-  const categories = ['Économie', 'Environnement', 'Démocratie', 'Travail', 'Éducation', 'Santé', 'Logement', 'Autre']
+  const categories = ['Économie', 'Environnement', 'Démocratie', 'Travail', 'Éducation', 'Santé', 'Logement', 'Justice', 'Autre']
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -4124,7 +4150,7 @@ function LibraryPage() {
   }
   type SortKey = 'recent' | 'votes' | 'alpha'
 
-  const CATEGORIES = ['Toutes', 'Économie', 'Social', 'Numérique', 'Institutions', 'Sécurité', 'Défense', 'Environnement']
+  const CATEGORIES = ['Toutes', 'Économie', 'Social', 'Numérique', 'Institutions', 'Sécurité', 'Défense', 'Environnement', 'Justice']
 
   const [entries, setEntries]           = useState<LibraryEntry[]>([])
   const [loading, setLoading]           = useState(true)
