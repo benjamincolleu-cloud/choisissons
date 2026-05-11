@@ -2205,7 +2205,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         <div className="space-y-4 text-sm text-slate-600 leading-relaxed">
           <div>
             <p className="font-semibold text-slate-700 mb-1">Éditeur de la plateforme</p>
-            <p>Benjamin Colleu<br/>Micro-entrepreneur — SIRET : 445 241 649 00000<br/>Adresse : Dordogne (24), France<br/>Contact : contact@choisissons.fr</p>
+            <p>Benjamin Colleu<br/>Micro-entrepreneur — SIRET : 445 241 649 00059<br/>Adresse : Dordogne (24), France<br/>Contact : contact@choisissons.fr</p>
           </div>
           <div>
             <p className="font-semibold text-slate-700 mb-1">Directeur de la publication</p>
