@@ -339,9 +339,7 @@ function AboutModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
         <div className="bg-indigo-600 p-5 text-white text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-500 mb-3">
-            <Vote size={24} className="text-white" />
-          </div>
+          <img src="/logo.png" alt="CHOISISSONS" className="w-16 h-16 object-contain mb-3" />
           <h2 className="text-xl font-black tracking-tight">CHOISISSONS</h2>
           <p className="text-indigo-200 text-xs mt-1">La démocratie directe citoyenne</p>
         </div>
