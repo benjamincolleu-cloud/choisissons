@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import type { ElementType } from 'react'
 import { supabase } from './supabaseClient'
 import CommuneRegistration from './CommuneRegistration'
+import AssociationRegistration from './AssociationRegistration'
 import { getSupabaseIdentity, generateVoteProof } from './lib/identity'
 import { computeUrneRootHash, anchorHash } from './lib/blockchain'
 import { fetchDossiersLegislatifs } from './lib/assemblee'
@@ -17,7 +18,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────
 type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
-type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune' | 'commune-register'
+type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune' | 'commune-register' | 'assoc-register'
 
 interface Argument {
   id: string
@@ -1617,10 +1618,11 @@ const MOCK_ORGANISATIONS: Organisation[] = [
   { id: 'org-7', name: 'Mediapart', type: 'media', description: 'Journal d\'investigation en ligne' },
 ]
 
-function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigateCommuneRegister }: {
+function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigateCommuneRegister, onNavigateAssocRegister }: {
   onSelectCategory: (cat: string) => void
   userHash: string
   onNavigateCommuneRegister: () => void
+  onNavigateAssocRegister: () => void
 }) {
   const [exploreTab, setExploreTab] = useState<'discover' | 'organisations'>('discover')
 
@@ -1922,7 +1924,7 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
           {/* CTA inscription commune */}
           <button
             onClick={onNavigateCommuneRegister}
-            className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-indigo-600 text-white active:scale-95 transition-all shadow-sm mb-4"
+            className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-indigo-600 text-white active:scale-95 transition-all shadow-sm mb-3"
           >
             <div className="flex items-center gap-3">
               <Building2 size={16} className="text-indigo-200 flex-shrink-0" />
@@ -1932,6 +1934,21 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
               </div>
             </div>
             <ChevronRight size={16} className="text-indigo-200 flex-shrink-0" />
+          </button>
+
+          {/* CTA inscription association */}
+          <button
+            onClick={onNavigateAssocRegister}
+            className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-emerald-600 text-white active:scale-95 transition-all shadow-sm mb-4"
+          >
+            <div className="flex items-center gap-3">
+              <Users size={16} className="text-emerald-200 flex-shrink-0" />
+              <div className="text-left">
+                <p className="text-sm font-semibold leading-tight">Inscrire mon association</p>
+                <p className="text-emerald-200 text-xs mt-0.5">Rejoindre le réseau associatif citoyen</p>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-emerald-200 flex-shrink-0" />
           </button>
 
           {/* Sub-tabs */}
@@ -3565,9 +3582,24 @@ const COMMUNE_PLAN_MAP: Record<CommuneTier, string> = {
   large:  'commune_grande',
 }
 
+const ASSOC_TIERS = [
+  { value: 's', label: "Jusqu'à 50 adhérents",  price: '9€'  },
+  { value: 'm', label: "Jusqu'à 200 adhérents", price: '19€' },
+  { value: 'l', label: 'Adhérents illimités',   price: '49€' },
+] as const
+type AssocTier = typeof ASSOC_TIERS[number]['value']
+
+const ASSOC_PLAN_MAP: Record<AssocTier, string> = {
+  s: 'assoc_s',
+  m: 'assoc_m',
+  l: 'assoc_l',
+}
+
 function SupportPage() {
-  const [selected, setSelected]             = useState<string | null>(null)
-  const [communeSize, setCommuneSize]       = useState<CommuneTier>('small')
+  const [selected, setSelected]               = useState<string | null>(null)
+  const [communeSize, setCommuneSize]         = useState<CommuneTier>('small')
+  const [assocSize, setAssocSize]             = useState<AssocTier>('s')
+  const [expanded, setExpanded]               = useState<'commune' | 'assoc' | null>(null)
   const [loadingCheckout, setLoadingCheckout] = useState<string | null>(null)
 
   async function handleCheckout(plan: string) {
@@ -3587,52 +3619,6 @@ function SupportPage() {
       setLoadingCheckout(null)
     }
   }
-
-  const plans: {
-    id: string
-    name: string
-    price: string
-    period: string
-    icon: ElementType
-    headerBg: string
-    borderColor: string
-    features: string[]
-    cta: string
-  }[] = [
-    {
-      id: 'citoyen',
-      name: 'Citoyen',
-      price: '2€',
-      period: '/mois',
-      icon: User,
-      headerBg: 'bg-indigo-600',
-      borderColor: 'border-indigo-300',
-      features: ['Accès complet sans publicité', 'Badge citoyen soutenant', 'Newsletter mensuelle', 'Vote prioritaire'],
-      cta: 'Soutenir la démocratie',
-    },
-    {
-      id: 'media',
-      name: 'Média',
-      price: '29€',
-      period: '/mois',
-      icon: Newspaper,
-      headerBg: 'bg-slate-600',
-      borderColor: 'border-slate-300',
-      features: ['API accès données', 'Tableau de bord analytics', 'Export CSV / JSON', 'Badge média partenaire', 'Support prioritaire'],
-      cta: 'Accès média',
-    },
-    {
-      id: 'ong',
-      name: 'ONG / Association',
-      price: '49€',
-      period: '/mois',
-      icon: Building2,
-      headerBg: 'bg-amber-600',
-      borderColor: 'border-amber-300',
-      features: ["Tout l'offre Média", 'Page organisation dédiée', '10 comptes membres', 'Propositions co-sponsorisées', "Rapport d'impact trimestriel"],
-      cta: 'Rejoindre en ONG',
-    },
-  ]
 
   return (
     <div className="p-4">
@@ -3656,116 +3642,230 @@ function SupportPage() {
         </div>
       </div>
 
-      {/* Plans */}
       <div className="space-y-4">
-        {plans.map(plan => {
-          const Icon = plan.icon
-          const isSelected = selected === plan.id
-          return (
-            <div
-              key={plan.id}
-              className={`rounded-2xl border-2 overflow-hidden transition-all ${plan.borderColor} ${isSelected ? 'shadow-lg' : ''}`}
-            >
-              <div className={`${plan.headerBg} p-4 text-white flex items-center justify-between`}>
-                <div className="flex items-center gap-3">
-                  <Icon size={20} />
-                  <span className="font-black text-lg">{plan.name}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-2xl font-black">{plan.price}</span>
-                  <span className="text-xs opacity-75 ml-0.5">{plan.period}</span>
-                </div>
-              </div>
-              <div className="p-4 bg-white">
-                <ul className="space-y-2 mb-4">
-                  {plan.features.map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
-                      <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => isSelected ? void handleCheckout(plan.id) : setSelected(plan.id)}
-                  disabled={loadingCheckout === plan.id}
-                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
-                    isSelected ? 'bg-slate-800 text-white' : `${plan.headerBg} text-white`
-                  }`}
-                >
-                  {loadingCheckout === plan.id ? 'Redirection…' : isSelected ? '✓ Sélectionné — Passer au paiement →' : plan.cta}
-                </button>
-              </div>
-            </div>
-          )
-        })}
 
-        {/* Commune & Collectivité — tarif dégressif */}
-        {(() => {
-          const tier = COMMUNE_TIERS.find(t => t.value === communeSize)!
-          const isSelected = selected === 'commune'
-          return (
-            <div className={`rounded-2xl border-2 overflow-hidden transition-all border-teal-300 ${isSelected ? 'shadow-lg' : ''}`}>
-              <div className="bg-teal-700 p-4 text-white flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Landmark size={20} />
-                  <span className="font-black text-lg">Commune &amp; Collectivité</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-2xl font-black">{tier.price}</span>
-                  <span className="text-xs opacity-75 ml-0.5">/mois</span>
-                </div>
-              </div>
-              <div className="p-4 bg-white">
-                <div className="mb-4">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    Tranche d'habitants
-                  </label>
-                  <div className="space-y-2">
-                    {COMMUNE_TIERS.map(t => (
-                      <button
-                        key={t.value}
-                        onClick={() => setCommuneSize(t.value)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                          communeSize === t.value
-                            ? 'border-teal-500 bg-teal-50 text-teal-800'
-                            : 'border-slate-200 bg-slate-50 text-slate-600'
-                        }`}
-                      >
-                        <span>{t.label}</span>
-                        <span className={`font-black ${communeSize === t.value ? 'text-teal-700' : 'text-slate-400'}`}>
-                          {t.price}/mois
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <ul className="space-y-2 mb-4">
-                  {[
-                    'Accès API données',
-                    'Tableau de bord pour les élus',
-                    'Consultation citoyenne intégrée',
-                    "Rapport d'engagement mensuel",
-                    'Support prioritaire',
-                  ].map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
-                      <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => isSelected ? void handleCheckout(COMMUNE_PLAN_MAP[communeSize]) : setSelected('commune')}
-                  disabled={loadingCheckout === 'commune'}
-                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
-                    isSelected ? 'bg-slate-800 text-white' : 'bg-teal-700 text-white'
-                  }`}
-                >
-                  {loadingCheckout === 'commune' ? 'Redirection…' : isSelected ? '✓ Sélectionné — Passer au paiement →' : 'Équiper ma commune'}
-                </button>
-              </div>
+        {/* ── Citoyen ── */}
+        <div className={`rounded-2xl border-2 overflow-hidden transition-all border-indigo-300 ${selected === 'citoyen' ? 'shadow-lg' : ''}`}>
+          <div className="bg-indigo-600 p-4 text-white flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <User size={20} />
+              <span className="font-black text-lg">Citoyen</span>
             </div>
-          )
-        })()}
+            <div className="text-right">
+              <span className="text-2xl font-black">2€</span>
+              <span className="text-xs opacity-75 ml-0.5">/mois</span>
+            </div>
+          </div>
+          <div className="p-4 bg-white">
+            <ul className="space-y-2 mb-4">
+              {['Accès complet sans publicité', 'Badge citoyen soutenant', 'Newsletter mensuelle', 'Vote prioritaire'].map(f => (
+                <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
+                  <CheckCircle size={14} className="text-green-500 flex-shrink-0" />{f}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => selected === 'citoyen' ? void handleCheckout('citoyen') : setSelected('citoyen')}
+              disabled={loadingCheckout === 'citoyen'}
+              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
+                selected === 'citoyen' ? 'bg-slate-800 text-white' : 'bg-indigo-600 text-white'
+              }`}
+            >
+              {loadingCheckout === 'citoyen' ? 'Redirection…' : selected === 'citoyen' ? '✓ Sélectionné — Passer au paiement →' : 'Soutenir la démocratie'}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Commune & Collectivité (accordion) ── */}
+        <div className={`rounded-2xl border-2 overflow-hidden transition-all border-teal-300 ${selected === 'commune' ? 'shadow-lg' : ''}`}>
+          <button
+            className="w-full bg-teal-700 p-4 text-white flex items-center justify-between"
+            onClick={() => setExpanded(expanded === 'commune' ? null : 'commune')}
+          >
+            <div className="flex items-center gap-3">
+              <Landmark size={20} />
+              <span className="font-black text-lg">Commune &amp; Collectivité</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <span className="text-xl font-black">49€–499€</span>
+                <span className="text-xs opacity-75 ml-0.5">/mois</span>
+              </div>
+              <ChevronRight size={16} className={`transition-transform ${expanded === 'commune' ? 'rotate-90' : ''}`} />
+            </div>
+          </button>
+          {expanded === 'commune' && (
+            <div className="p-4 bg-white">
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  Tranche d'habitants
+                </label>
+                <div className="space-y-2">
+                  {COMMUNE_TIERS.map(t => (
+                    <button
+                      key={t.value}
+                      onClick={() => setCommuneSize(t.value)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                        communeSize === t.value
+                          ? 'border-teal-500 bg-teal-50 text-teal-800'
+                          : 'border-slate-200 bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <span>{t.label}</span>
+                      <span className={`font-black ${communeSize === t.value ? 'text-teal-700' : 'text-slate-400'}`}>
+                        {t.price}/mois
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ul className="space-y-2 mb-4">
+                {['Accès API données', 'Tableau de bord pour les élus', 'Consultation citoyenne intégrée', "Rapport d'engagement mensuel", 'Support prioritaire'].map(f => (
+                  <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
+                    <CheckCircle size={14} className="text-green-500 flex-shrink-0" />{f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => selected === 'commune' ? void handleCheckout(COMMUNE_PLAN_MAP[communeSize]) : setSelected('commune')}
+                disabled={loadingCheckout === 'commune'}
+                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
+                  selected === 'commune' ? 'bg-slate-800 text-white' : 'bg-teal-700 text-white'
+                }`}
+              >
+                {loadingCheckout === 'commune' ? 'Redirection…' : selected === 'commune' ? '✓ Sélectionné — Passer au paiement →' : 'Équiper ma commune'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Association (accordion) ── */}
+        <div className={`rounded-2xl border-2 overflow-hidden transition-all border-emerald-300 ${selected === 'assoc' ? 'shadow-lg' : ''}`}>
+          <button
+            className="w-full bg-emerald-700 p-4 text-white flex items-center justify-between"
+            onClick={() => setExpanded(expanded === 'assoc' ? null : 'assoc')}
+          >
+            <div className="flex items-center gap-3">
+              <Users size={20} />
+              <span className="font-black text-lg">Association</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <span className="text-xl font-black">9€–49€</span>
+                <span className="text-xs opacity-75 ml-0.5">/mois</span>
+              </div>
+              <ChevronRight size={16} className={`transition-transform ${expanded === 'assoc' ? 'rotate-90' : ''}`} />
+            </div>
+          </button>
+          {expanded === 'assoc' && (
+            <div className="p-4 bg-white">
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  Taille de l'association
+                </label>
+                <div className="space-y-2">
+                  {ASSOC_TIERS.map(t => (
+                    <button
+                      key={t.value}
+                      onClick={() => setAssocSize(t.value)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                        assocSize === t.value
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                          : 'border-slate-200 bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <span>{t.label}</span>
+                      <span className={`font-black ${assocSize === t.value ? 'text-emerald-700' : 'text-slate-400'}`}>
+                        {t.price}/mois
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ul className="space-y-2 mb-4">
+                {['Page association publique', 'Propositions co-sponsorisées', 'Tableau de bord membres', "Rapport d'impact mensuel", 'Support prioritaire'].map(f => (
+                  <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
+                    <CheckCircle size={14} className="text-green-500 flex-shrink-0" />{f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => selected === 'assoc' ? void handleCheckout(ASSOC_PLAN_MAP[assocSize]) : setSelected('assoc')}
+                disabled={loadingCheckout === 'assoc'}
+                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
+                  selected === 'assoc' ? 'bg-slate-800 text-white' : 'bg-emerald-700 text-white'
+                }`}
+              >
+                {loadingCheckout === 'assoc' ? 'Redirection…' : selected === 'assoc' ? '✓ Sélectionné — Passer au paiement →' : 'Rejoindre en association'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── ONG / Fondation ── */}
+        <div className={`rounded-2xl border-2 overflow-hidden transition-all border-amber-300 ${selected === 'ong' ? 'shadow-lg' : ''}`}>
+          <div className="bg-amber-600 p-4 text-white flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Globe size={20} />
+              <span className="font-black text-lg">ONG / Fondation</span>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-black">49€</span>
+              <span className="text-xs opacity-75 ml-0.5">/mois</span>
+            </div>
+          </div>
+          <div className="p-4 bg-white">
+            <ul className="space-y-2 mb-4">
+              {["Tout l'offre Association L", 'Page organisation dédiée', '10 comptes membres', 'Propositions co-sponsorisées', "Rapport d'impact trimestriel"].map(f => (
+                <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
+                  <CheckCircle size={14} className="text-green-500 flex-shrink-0" />{f}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => selected === 'ong' ? void handleCheckout('ong') : setSelected('ong')}
+              disabled={loadingCheckout === 'ong'}
+              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
+                selected === 'ong' ? 'bg-slate-800 text-white' : 'bg-amber-600 text-white'
+              }`}
+            >
+              {loadingCheckout === 'ong' ? 'Redirection…' : selected === 'ong' ? '✓ Sélectionné — Passer au paiement →' : 'Rejoindre en ONG'}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Média ── */}
+        <div className={`rounded-2xl border-2 overflow-hidden transition-all border-slate-300 ${selected === 'media' ? 'shadow-lg' : ''}`}>
+          <div className="bg-slate-600 p-4 text-white flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Newspaper size={20} />
+              <span className="font-black text-lg">Média</span>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-black">29€</span>
+              <span className="text-xs opacity-75 ml-0.5">/mois</span>
+            </div>
+          </div>
+          <div className="p-4 bg-white">
+            <ul className="space-y-2 mb-4">
+              {['API accès données', 'Tableau de bord analytics', 'Export CSV / JSON', 'Badge média partenaire', 'Support prioritaire'].map(f => (
+                <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
+                  <CheckCircle size={14} className="text-green-500 flex-shrink-0" />{f}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => selected === 'media' ? void handleCheckout('media') : setSelected('media')}
+              disabled={loadingCheckout === 'media'}
+              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
+                selected === 'media' ? 'bg-slate-800 text-white' : 'bg-slate-600 text-white'
+              }`}
+            >
+              {loadingCheckout === 'media' ? 'Redirection…' : selected === 'media' ? '✓ Sélectionné — Passer au paiement →' : 'Accès média'}
+            </button>
+          </div>
+        </div>
+
       </div>
 
       <p className="text-center text-xs text-slate-400 mt-4 pb-2">
@@ -5073,6 +5173,17 @@ export default function App() {
     )
   }
 
+  if (activePage === 'assoc-register') {
+    return (
+      <>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        <div className="max-w-md mx-auto md:max-w-[640px] min-h-screen overflow-y-auto">
+          <AssociationRegistration onBack={() => setActivePage('explore')} />
+        </div>
+      </>
+    )
+  }
+
   if (activePage === 'commune' && selectedCommunePage) {
     return (
       <>
@@ -5152,7 +5263,7 @@ export default function App() {
       <div className="md:pl-56 xl:pl-64 md:pt-14">
         <main className="pb-24 md:pb-10 md:max-w-[900px] xl:max-w-[1100px] md:mx-auto">
           {activePage === 'home'    && <HomePage initialCategory={pendingCategory} userHash={userHash} />}
-          {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} onNavigateCommuneRegister={() => setActivePage('commune-register')} />}
+          {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} onNavigateCommuneRegister={() => setActivePage('commune-register')} onNavigateAssocRegister={() => setActivePage('assoc-register')} />}
           {activePage === 'profile' && (
             <ProfilePage
               onLogout={() => { void supabase.auth.signOut(); setActivePage('home') }}
