@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import type { ElementType } from 'react'
 import { supabase } from './supabaseClient'
+import CommuneRegistration from './CommuneRegistration'
 import { getSupabaseIdentity, generateVoteProof } from './lib/identity'
 import { computeUrneRootHash, anchorHash } from './lib/blockchain'
 import { fetchDossiersLegislatifs } from './lib/assemblee'
@@ -16,7 +17,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────
 type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
-type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune'
+type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune' | 'commune-register'
 
 interface Argument {
   id: string
@@ -1616,7 +1617,11 @@ const MOCK_ORGANISATIONS: Organisation[] = [
   { id: 'org-7', name: 'Mediapart', type: 'media', description: 'Journal d\'investigation en ligne' },
 ]
 
-function ExplorePage({ onSelectCategory: _onSelectCategory, userHash }: { onSelectCategory: (cat: string) => void; userHash: string }) {
+function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigateCommuneRegister }: {
+  onSelectCategory: (cat: string) => void
+  userHash: string
+  onNavigateCommuneRegister: () => void
+}) {
   const [exploreTab, setExploreTab] = useState<'discover' | 'organisations'>('discover')
 
   // Discover tab state
@@ -1914,6 +1919,21 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash }: { onSele
       {/* ── Organisations tab ── */}
       {exploreTab === 'organisations' && (
         <>
+          {/* CTA inscription commune */}
+          <button
+            onClick={onNavigateCommuneRegister}
+            className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-indigo-600 text-white active:scale-95 transition-all shadow-sm mb-4"
+          >
+            <div className="flex items-center gap-3">
+              <Building2 size={16} className="text-indigo-200 flex-shrink-0" />
+              <div className="text-left">
+                <p className="text-sm font-semibold leading-tight">Inscrire ma commune</p>
+                <p className="text-indigo-200 text-xs mt-0.5">Rejoindre la démocratie directe locale</p>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-indigo-200 flex-shrink-0" />
+          </button>
+
           {/* Sub-tabs */}
           <div className="flex gap-2 mb-4">
             {(['commune', 'ong', 'media'] as const).map(sub => (
@@ -5042,6 +5062,17 @@ export default function App() {
     )
   }
 
+  if (activePage === 'commune-register') {
+    return (
+      <>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        <div className="max-w-md mx-auto md:max-w-[640px] min-h-screen overflow-y-auto">
+          <CommuneRegistration onBack={() => setActivePage('explore')} />
+        </div>
+      </>
+    )
+  }
+
   if (activePage === 'commune' && selectedCommunePage) {
     return (
       <>
@@ -5121,7 +5152,7 @@ export default function App() {
       <div className="md:pl-56 xl:pl-64 md:pt-14">
         <main className="pb-24 md:pb-10 md:max-w-[900px] xl:max-w-[1100px] md:mx-auto">
           {activePage === 'home'    && <HomePage initialCategory={pendingCategory} userHash={userHash} />}
-          {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} />}
+          {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} onNavigateCommuneRegister={() => setActivePage('commune-register')} />}
           {activePage === 'profile' && (
             <ProfilePage
               onLogout={() => { void supabase.auth.signOut(); setActivePage('home') }}
