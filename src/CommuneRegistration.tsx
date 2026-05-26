@@ -116,7 +116,7 @@ export default function CommuneRegistration({ onBack }: { onBack: () => void }) 
         responsable_fonction: s2.fonction,
         type:                 'commune',
         verification_status:  'pending',
-        abonnement:           false,
+        abonnement:           'pending',
       })
       if (e) throw e
       setSubmitted(true)
