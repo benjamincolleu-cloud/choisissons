@@ -1,0 +1,170 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const AN_API_URL =
+  'https://data.assemblee-nationale.fr/api/v2/documents?type=PRJL,PION&legislature=17&limit=50'
+
+interface LawRow {
+  number:               string
+  title:                string
+  description:          string
+  category:             string
+  stage:                string
+  parliament_vote_date: string | null
+  votes:                { pour: number; contre: number; blanc: number }
+  official_url:         string
+  synced_at:            string
+}
+
+// ── Mapping catégories ──────────────────────────────────────────
+const CATEGORY_RULES: Array<{ keywords: string[]; category: string }> = [
+  { keywords: ['santé', 'maladie', 'hôpital', 'médecin', 'soins', 'pharmacie', 'dépendance'], category: 'Santé' },
+  { keywords: ['écologi', 'environnement', 'climat', 'biodiversité', 'énergie', 'renouvelable', 'carbone', 'pollution', 'eau', 'forêt'], category: 'Écologie' },
+  { keywords: ['justice', 'judiciaire', 'tribunal', 'pénal', 'crime', 'délit', 'prison', 'avocat', 'droit civil'], category: 'Justice' },
+  { keywords: ['économi', 'financ', 'budget', 'fiscal', 'impôt', 'taxe', 'emploi', 'travail', 'industrie', 'commerce', 'entreprise'], category: 'Économie' },
+  { keywords: ['éducation', 'école', 'lycée', 'université', 'enseignement', 'formation', 'jeunesse', 'apprentissage'], category: 'Éducation' },
+  { keywords: ['état', 'administration', 'fonction publique', 'service public', 'collectivité', 'décentralisation'], category: 'État' },
+]
+
+function mapCategory(sources: string[]): string {
+  const haystack = sources.join(' ').toLowerCase()
+  for (const { keywords, category } of CATEGORY_RULES) {
+    if (keywords.some(k => haystack.includes(k))) return category
+  }
+  return 'Institutions'
+}
+
+// ── Extraction robuste du tableau de documents ──────────────────
+function extractItems(raw: unknown): unknown[] {
+  if (!raw || typeof raw !== 'object') return []
+  const r = raw as Record<string, unknown>
+  // Format v2 standard
+  if (Array.isArray(r.items))     return r.items
+  if (Array.isArray(r.documents)) return r.documents
+  if (Array.isArray(r.data))      return r.data
+  if (Array.isArray(raw))         return raw
+  // Format export XML converti en JSON
+  const exp = r.export as Record<string, unknown> | undefined
+  if (exp) {
+    const dl = exp.dossiersLegislatifs as Record<string, unknown> | undefined
+    if (dl && Array.isArray(dl.dossierLegislatif)) return dl.dossierLegislatif
+  }
+  return []
+}
+
+// ── Mapper un document brut → LawRow ───────────────────────────
+function mapDocument(d: unknown, index: number): LawRow | null {
+  if (!d || typeof d !== 'object') return null
+  const r = d as Record<string, unknown>
+
+  const uid   = (r.uid ?? r.id ?? r.numero ?? `doc-${index}`) as string
+  const title = (r.titre ?? r.titreCourt ?? r.title ?? '') as string
+  if (!title) return null
+
+  // Thèmes : tableau d'objets { libelle } ou tableau de chaînes
+  const rawThemes = (r.themes ?? r.theme ?? r.matieres ?? []) as unknown[]
+  const themes: string[] = Array.isArray(rawThemes)
+    ? rawThemes
+        .map(t => (typeof t === 'string' ? t : ((t as Record<string, unknown>).libelle as string) ?? ''))
+        .filter(Boolean)
+    : []
+
+  // Description
+  const description =
+    ((r.description ?? r.expose ?? r.exposeDesMotifs ?? r.objet ?? '') as string).trim() || title
+
+  // Date de vote
+  const voteDate =
+    (r.dateVoteSeance ?? r.dateAdoption ?? r.dateVote ?? null) as string | null
+
+  // URL officielle
+  const officialUrl =
+    (r.urlAn ?? r.url ?? r.cheminUrl ??
+      `https://www.assemblee-nationale.fr/dyn/17/dossiers/${uid}`) as string
+
+  return {
+    number:               uid,
+    title,
+    description,
+    category:             mapCategory([...themes, title]),
+    stage:                'voting',
+    parliament_vote_date: voteDate || null,
+    votes:                { pour: 0, contre: 0, blanc: 0 },
+    official_url:         officialUrl,
+    synced_at:            new Date().toISOString(),
+  }
+}
+
+// ── Handler principal ───────────────────────────────────────────
+Deno.serve(async (req) => {
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return new Response('Method Not Allowed', { status: 405 })
+  }
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  )
+
+  let synced = 0
+  let errors = 0
+
+  // 1. Appel API AN
+  let raw: unknown = null
+  try {
+    const res = await fetch(AN_API_URL, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    raw = await res.json()
+    console.log('[sync-parliamentary-laws] API réponse (extrait):', JSON.stringify(raw).slice(0, 400))
+  } catch (e) {
+    console.error('[sync-parliamentary-laws] Erreur appel API:', e)
+    errors++
+  }
+
+  // 2. Mapper les documents
+  const items = extractItems(raw)
+  console.log(`[sync-parliamentary-laws] ${items.length} documents extraits`)
+
+  const laws: LawRow[] = items
+    .map((d, i) => {
+      try {
+        return mapDocument(d, i)
+      } catch (e) {
+        console.error(`[sync-parliamentary-laws] Erreur mapping item ${i}:`, e)
+        errors++
+        return null
+      }
+    })
+    .filter((l): l is LawRow => l !== null)
+
+  // 3. UPSERT par lot
+  if (laws.length > 0) {
+    const BATCH = 20
+    for (let i = 0; i < laws.length; i += BATCH) {
+      const batch = laws.slice(i, i + BATCH)
+      try {
+        const { error } = await supabase
+          .from('parliamentary_laws')
+          .upsert(batch, { onConflict: 'number' })
+        if (error) {
+          console.error(`[sync-parliamentary-laws] Upsert lot ${i}:`, error.message)
+          errors += batch.length
+        } else {
+          synced += batch.length
+        }
+      } catch (e) {
+        console.error(`[sync-parliamentary-laws] Exception lot ${i}:`, e)
+        errors += batch.length
+      }
+    }
+  }
+
+  const result = { synced, errors, timestamp: new Date().toISOString() }
+  console.log('[sync-parliamentary-laws] Résultat:', result)
+
+  return new Response(JSON.stringify(result), {
+    headers: { 'Content-Type': 'application/json' },
+  })
+})
