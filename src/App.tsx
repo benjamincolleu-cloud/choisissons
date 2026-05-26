@@ -378,16 +378,54 @@ function AboutModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+function sha256Hex(text: string): Promise<string> {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then(buf =>
+    Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+  )
+}
+
+function isAtLeast18(dateStr: string): boolean {
+  const birth = new Date(dateStr)
+  const limit = new Date(birth.getFullYear() + 18, birth.getMonth(), birth.getDate())
+  return new Date() >= limit
+}
+
 function LoginScreen() {
   const [email, setEmail]             = useState('')
+  const [codePostal, setCodePostal]   = useState('')
+  const [dateNaissance, setDateNaissance] = useState('')
+  const [certifie, setCertifie]       = useState(false)
   const [sending, setSending]         = useState(false)
   const [sent, setSent]               = useState(false)
   const [activeStep, setActiveStep]   = useState<number | null>(null)
   const [showAbout, setShowAbout]     = useState(false)
 
+  const formValid = email.trim() && /^\d{5}$/.test(codePostal) && dateNaissance && certifie
+
   const handleSendLink = async () => {
     if (!email.trim() || sending) return
+    if (!/^\d{5}$/.test(codePostal)) {
+      showToast('Le code postal doit contenir exactement 5 chiffres.')
+      return
+    }
+    if (!dateNaissance) {
+      showToast('Veuillez entrer votre date de naissance.')
+      return
+    }
+    if (!isAtLeast18(dateNaissance)) {
+      showToast('Vous devez avoir 18 ans minimum pour vous inscrire.')
+      return
+    }
+    if (!certifie) {
+      showToast('Vous devez cocher la case de certification.')
+      return
+    }
     setSending(true)
+    const dateHash = await sha256Hex(dateNaissance)
+    localStorage.setItem('pending_profile', JSON.stringify({
+      code_postal: codePostal,
+      date_naissance_hash: dateHash,
+    }))
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
@@ -461,9 +499,41 @@ function LoginScreen() {
               autoComplete="email"
               className="w-full bg-white/10 border border-white/20 text-white placeholder-indigo-300 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300 mb-3"
             />
+            <input
+              type="text"
+              value={codePostal}
+              onChange={e => setCodePostal(e.target.value.replace(/\D/g, '').slice(0, 5))}
+              placeholder="Code postal (ex : 75011)"
+              inputMode="numeric"
+              maxLength={5}
+              className="w-full bg-white/10 border border-white/20 text-white placeholder-indigo-300 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300 mb-3"
+            />
+            <div className="mb-3">
+              <label className="block text-indigo-200 text-xs font-medium mb-1.5">
+                Date de naissance <span className="text-indigo-400">(18 ans minimum)</span>
+              </label>
+              <input
+                type="date"
+                value={dateNaissance}
+                onChange={e => setDateNaissance(e.target.value)}
+                max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
+                className="w-full bg-white/10 border border-white/20 text-white rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300 [color-scheme:dark]"
+              />
+            </div>
+            <label className="flex items-start gap-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={certifie}
+                onChange={e => setCertifie(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-indigo-400 flex-shrink-0"
+              />
+              <span className="text-indigo-200 text-xs leading-relaxed">
+                Je certifie résider dans cette commune et voter en mon nom propre.
+              </span>
+            </label>
             <button
               onClick={() => void handleSendLink()}
-              disabled={!email.trim() || sending}
+              disabled={!formValid || sending}
               className="w-full bg-indigo-500 text-white rounded-xl py-4 px-6 font-semibold text-base flex items-center justify-center gap-3 shadow-xl hover:bg-indigo-400 active:scale-95 transition-all disabled:opacity-70"
             >
               {sending ? (
@@ -4813,13 +4883,29 @@ export default function App() {
         flushPendingVotes()
         window.history.replaceState(null, '', window.location.pathname)
 
-        // Rattachement commune via lien d'invitation
+        // Rattachement commune via lien d'invitation + profil inscription
         if (event === 'SIGNED_IN') {
           const pendingCommune = localStorage.getItem('pending_commune')
           if (pendingCommune) {
             await supabase.from('profiles').update({ commune_name: pendingCommune }).eq('id', session.user.id)
             localStorage.removeItem('pending_commune')
             showToast(`Bienvenue ! Vous êtes rattaché à ${pendingCommune}`, 'info')
+          }
+          const pendingProfile = localStorage.getItem('pending_profile')
+          if (pendingProfile) {
+            try {
+              const { code_postal, date_naissance_hash } = JSON.parse(pendingProfile) as {
+                code_postal: string
+                date_naissance_hash: string
+              }
+              await supabase.from('profiles').upsert({
+                id: session.user.id,
+                code_postal,
+                date_naissance_hash,
+                verification_status: 'unverified',
+              }, { onConflict: 'id' })
+            } catch { /* ignore parse / network errors */ }
+            localStorage.removeItem('pending_profile')
           }
         }
       }
