@@ -12,19 +12,30 @@ const stripe = new Stripe(stripeKey, {
 const SUCCESS_URL = 'https://choisissons.fr/mon-compte?success=true'
 const CANCEL_URL  = 'https://choisissons.fr/soutenir'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 // Toujours retourner 200 — l'erreur est dans le champ "error" du JSON.
 // Cela évite que supabase-js encapsule la réponse dans FunctionsHttpError
 // et cache le message réel côté frontend.
 function ok(body: unknown) {
   return new Response(JSON.stringify(body), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   })
 }
 
 Deno.serve(async (req) => {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { status: 200, headers: CORS_HEADERS })
+  }
+
   if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 })
+    return new Response('Method Not Allowed', { status: 405, headers: CORS_HEADERS })
   }
 
   try {
