@@ -3662,12 +3662,26 @@ function SupportPage() {
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: { plan, productId },
       })
-      if (error || !data?.url) {
+      // La fonction retourne toujours 200 ; les erreurs sont dans data.error
+      if (error) {
+        const msg = (error as { message?: string }).message ?? String(error)
+        console.error('[checkout] FunctionsError:', msg)
+        showToast(`Erreur paiement : ${msg}`, 'error')
+        return
+      }
+      const d = data as { url?: string; error?: string }
+      if (d?.error) {
+        console.error('[checkout] Function error:', d.error)
+        showToast(`Erreur : ${d.error}`, 'error')
+        return
+      }
+      if (!d?.url) {
         showToast("Impossible de lancer le paiement. Réessayez plus tard.", 'error')
         return
       }
-      window.location.href = data.url as string
-    } catch {
+      window.location.href = d.url
+    } catch (err) {
+      console.error('[checkout] catch:', err)
       showToast("Impossible de lancer le paiement. Réessayez plus tard.", 'error')
     } finally {
       setLoadingCheckout(null)
