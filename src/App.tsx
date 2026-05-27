@@ -2064,8 +2064,10 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   const [showLegal, setShowLegal]         = useState<string | null>(null)
   const [notifEnabled, setNotifEnabled]   = useState(true)
   const [language, setLanguage]           = useState('FR')
-  // TODO: remplacer par la vraie valeur issue de Stripe/Supabase (table subscriptions)
   const [userPlan, setUserPlan] = useState<'citoyen' | 'commune' | 'ong' | 'media'>('citoyen')
+  const [subscriptionPlan, setSubscriptionPlan]     = useState<string>('gratuit')
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string>('inactive')
+  const [showSuccessBanner, setShowSuccessBanner]   = useState(false)
 
   const [votedProposals, setVotedProposals]   = useState<VoteRecord[]>([])
   const [loadingVotes, setLoadingVotes]       = useState(true)
@@ -2079,13 +2081,26 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   const userInitials = nameToInitials(displayName)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('success') === 'true') {
+      setShowSuccessBanner(true)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       const rawName = (user.user_metadata?.full_name as string | undefined)?.trim() ?? ''
       if (rawName) setFullName(rawName)
-      supabase.from('profiles').select('commune_name').eq('id', user.id).single().then(({ data }) => {
-        if (data?.commune_name) setProfileCommune(data.commune_name as string)
-      })
+      supabase
+        .from('profiles')
+        .select('commune_name, subscription_plan, subscription_status')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.commune_name) setProfileCommune(data.commune_name as string)
+          if (data?.subscription_plan)  setSubscriptionPlan(data.subscription_plan as string)
+          if (data?.subscription_status) setSubscriptionStatus(data.subscription_status as string)
+        })
     })
   }, [])
 
@@ -2358,6 +2373,23 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         <h1 className="text-2xl font-black text-slate-800">Mon Compte</h1>
       </div>
 
+      {/* Bandeau succès abonnement */}
+      {showSuccessBanner && (
+        <div className="mb-4 flex items-center justify-between gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-600 font-bold text-sm">Abonnement activé</span>
+            <span className="text-emerald-500 text-sm">Bienvenue dans CHOISISSONS</span>
+          </div>
+          <button
+            onClick={() => setShowSuccessBanner(false)}
+            className="text-emerald-400 hover:text-emerald-600 flex-shrink-0"
+            aria-label="Fermer"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* User card */}
       <div className="bg-indigo-600 rounded-2xl p-5 mb-4 text-white">
         <div className="flex items-start justify-between">
@@ -2368,10 +2400,14 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
             <div>
               <p className="font-black text-lg leading-tight">{displayName}</p>
               <p className="text-indigo-200 text-sm mt-0.5">{userEmail}</p>
-              <div className="flex gap-3 mt-2 text-xs text-indigo-300">
-                <span>{votedProposals.length} votes</span>
-                <span>·</span>
-                <span>{myProposals.length} propositions</span>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs font-semibold bg-white/20 text-white rounded-full px-2 py-0.5">
+                  {subscriptionStatus === 'active' ? subscriptionPlan.replace(/_/g, ' ') : 'Gratuit'}
+                </span>
+                <span className="text-indigo-300 text-xs">·</span>
+                <span className="text-xs text-indigo-300">{votedProposals.length} votes</span>
+                <span className="text-indigo-300 text-xs">·</span>
+                <span className="text-xs text-indigo-300">{myProposals.length} propositions</span>
               </div>
             </div>
           </div>
@@ -2670,7 +2706,8 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
       {/* DEV ONLY — simulateur de plan (retiré en prod) */}
       {import.meta.env.DEV && (
         <div className="mb-4 bg-yellow-50 border border-yellow-300 rounded-2xl p-4">
-          <p className="text-xs font-bold text-yellow-700 uppercase tracking-wider mb-2">⚙ Dev — Simuler le plan</p>
+          <p className="text-xs font-bold text-yellow-700 uppercase tracking-wider mb-2">Dev — Simuler le plan</p>
+          <p className="text-xs text-yellow-600 mb-2">Réel Supabase : <strong>{subscriptionPlan}</strong> ({subscriptionStatus})</p>
           <select
             value={userPlan}
             onChange={e => setUserPlan(e.target.value as 'citoyen' | 'commune' | 'ong' | 'media')}
@@ -3595,6 +3632,18 @@ const ASSOC_PLAN_MAP: Record<AssocTier, string> = {
   l: 'assoc_l',
 }
 
+const STRIPE_PRODUCT_IDS: Record<string, string> = {
+  citoyen:         'prod_UarythbFH8E5hs',
+  media:           'prod_UarzuwtLFr24b3',
+  ong:             'prod_UarzdtYPKStpea',
+  assoc_s:         'prod_Uas37yPOMHouwu',
+  assoc_m:         'prod_Uas4bJ3ZTxSv9i',
+  assoc_l:         'prod_Uas5VkdubNnzPK',
+  commune_petite:  'prod_Uas0rN3qtJiScl',
+  commune_moyenne: 'prod_Uas1PSHZycVXkh',
+  commune_grande:  'prod_Uas2pkPYdwxQ1h',
+}
+
 function SupportPage() {
   const [selected, setSelected]               = useState<string | null>(null)
   const [communeSize, setCommuneSize]         = useState<CommuneTier>('small')
@@ -3603,10 +3652,15 @@ function SupportPage() {
   const [loadingCheckout, setLoadingCheckout] = useState<string | null>(null)
 
   async function handleCheckout(plan: string) {
+    const productId = STRIPE_PRODUCT_IDS[plan]
+    if (!productId) {
+      showToast("Plan inconnu. Contactez le support.", 'error')
+      return
+    }
     setLoadingCheckout(plan)
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: { plan },
+        body: { plan, productId },
       })
       if (error || !data?.url) {
         showToast("Impossible de lancer le paiement. Réessayez plus tard.", 'error')

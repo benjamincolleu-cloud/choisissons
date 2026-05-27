@@ -6,18 +6,13 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
   httpClient: Stripe.createFetchHttpClient(),
 })
 
-const PRICE_MAP: Record<string, string> = {
-  citoyen:         Deno.env.get('STRIPE_PRICE_CITOYEN')    ?? '',
-  commune_petite:  Deno.env.get('STRIPE_PRICE_COMMUNE_S')  ?? '',
-  commune_moyenne: Deno.env.get('STRIPE_PRICE_COMMUNE_M')  ?? '',
-  commune_grande:  Deno.env.get('STRIPE_PRICE_COMMUNE_L')  ?? '',
-}
-
-const SUCCESS_URL = 'http://localhost:5173/merci'
-const CANCEL_URL  = 'http://localhost:5173/'
+const SUCCESS_URL = 'https://choisissons.fr/mon-compte?success=true'
+const CANCEL_URL  = 'https://choisissons.fr/soutenir'
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 })
+  }
 
   const authHeader = req.headers.get('Authorization') ?? ''
   const supabase = createClient(
@@ -32,10 +27,22 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Non authentifié' }), { status: 401 })
   }
 
-  const { plan } = await req.json() as { plan: string }
-  const priceId = PRICE_MAP[plan]
+  const { plan, productId } = await req.json() as { plan: string; productId: string }
+  if (!plan || !productId) {
+    return new Response(
+      JSON.stringify({ error: 'plan et productId sont requis' }),
+      { status: 400 },
+    )
+  }
+
+  // Résoudre dynamiquement le price_id depuis le product_id Stripe
+  const prices = await stripe.prices.list({ product: productId, active: true, limit: 1 })
+  const priceId = prices.data[0]?.id
   if (!priceId) {
-    return new Response(JSON.stringify({ error: `Plan inconnu ou non configuré: ${plan}` }), { status: 400 })
+    return new Response(
+      JSON.stringify({ error: `Aucun prix actif trouvé pour le produit : ${productId}` }),
+      { status: 400 },
+    )
   }
 
   // Récupérer ou créer le Stripe customer
@@ -52,16 +59,24 @@ Deno.serve(async (req) => {
       metadata: { supabase_user_id: user.id },
     })
     customerId = customer.id
-    await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id)
+    await supabase
+      .from('profiles')
+      .update({ stripe_customer_id: customerId })
+      .eq('id', user.id)
   }
 
+  // subscription_data.metadata est transmis à l'objet Subscription Stripe →
+  // le webhook customer.subscription.created peut lire supabase_user_id et plan
   const session = await stripe.checkout.sessions.create({
-    customer:    customerId,
-    mode:        'subscription',
-    line_items:  [{ price: priceId, quantity: 1 }],
+    customer:   customerId,
+    mode:       'subscription',
+    line_items: [{ price: priceId, quantity: 1 }],
+    subscription_data: {
+      metadata: { supabase_user_id: user.id, plan },
+    },
     success_url: SUCCESS_URL,
     cancel_url:  CANCEL_URL,
-    metadata:    { supabase_user_id: user.id, plan },
+    metadata: { supabase_user_id: user.id, plan },
   })
 
   return new Response(JSON.stringify({ url: session.url }), {

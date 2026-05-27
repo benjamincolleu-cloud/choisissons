@@ -16,6 +16,7 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
+    "@deno/types": "^0.0.1",
     "@eslint/js": "^9.39.4",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^24.12.2",
@@ -26,6 +27,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "stripe": "^22.1.1",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.0",
