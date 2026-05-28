@@ -483,6 +483,12 @@ function LoginScreen() {
               Un lien de connexion a été envoyé à{' '}
               <span className="font-semibold text-white">{email}</span>
             </p>
+            {((window.navigator as { standalone?: boolean }).standalone === true ||
+              window.matchMedia('(display-mode: standalone)').matches) && (
+              <p className="text-amber-300 text-xs leading-relaxed mb-3 bg-amber-900/30 rounded-xl px-3 py-2">
+                Sur iPhone : le lien s'ouvrira dans Safari. Après connexion, revenez sur cette application — elle se connectera automatiquement.
+              </p>
+            )}
             <button
               onClick={() => setSent(false)}
               className="text-indigo-300 text-xs underline underline-offset-2 hover:text-indigo-100 transition-colors"
@@ -1325,17 +1331,6 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
 
   const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) => {
     const isRevote = oldChoice !== undefined
-    setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
-    setProposals(prev =>
-      prev.map(p => {
-        if (p.id !== proposalId) return p
-        const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
-        if (isRevote && oldChoice) {
-          newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
-        }
-        return { ...p, votes: newVotes }
-      })
-    )
     setVotingProposal(null)
     setAgoraProposal(null)
 
@@ -1345,8 +1340,17 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     const mappedChoice = choiceMap[choice]
     const numericId    = parseInt(String(proposalId), 10)
 
-    // Loi AN (ID non numérique) → vote local uniquement
+    // Loi AN (ID non numérique) → vote local uniquement, pas de DB
     if (isNaN(numericId)) {
+      setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
+      setProposals(prev =>
+        prev.map(p => {
+          if (p.id !== proposalId) return p
+          const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
+          if (isRevote && oldChoice) newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
+          return { ...p, votes: newVotes }
+        })
+      )
       showToast('Votre avis sur cette loi a été enregistré ✓', 'info')
       return
     }
@@ -1360,6 +1364,10 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     }
     console.log('[deposer_bulletin] params:', voteParams)
 
+    // Use user's auth token so RLS policies let the INSERT through
+    const { data: { session } } = await supabase.auth.getSession()
+    const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+
     const voteRes  = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
       {
@@ -1367,7 +1375,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
         headers: {
           'Content-Type': 'application/json',
           'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify(voteParams),
       }
@@ -1382,7 +1390,20 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
         savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
       }
       showToast('Vote sauvegardé localement. Il sera envoyé à la prochaine connexion.', 'warning')
-    } else if (isRevote) {
+      return
+    }
+
+    // DB write confirmed — update UI
+    setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
+    setProposals(prev =>
+      prev.map(p => {
+        if (p.id !== proposalId) return p
+        const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
+        if (isRevote && oldChoice) newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
+        return { ...p, votes: newVotes }
+      })
+    )
+    if (isRevote) {
       showToast('Vote mis à jour ✓', 'info')
     } else {
       setResultsProposalId(proposalId)
@@ -1606,6 +1627,47 @@ interface Organisation {
   population?: number
   code_insee?: string
   abonnement?: boolean
+}
+
+type CommuneRole   = 'member' | 'admin' | 'elu' | 'agent_com' | 'lecteur_admin'
+type CommuneAction = 'create_consultation' | 'publish_news' | 'publish_agenda' | 'publish_editorial' | 'upload_bulletin' | 'manage_members' | 'view_stats'
+
+function canDo(role: CommuneRole, action: CommuneAction): boolean {
+  const matrix: Record<CommuneAction, CommuneRole[]> = {
+    create_consultation: ['admin', 'elu'],
+    publish_news:        ['admin', 'elu', 'agent_com'],
+    publish_agenda:      ['admin', 'elu', 'agent_com'],
+    publish_editorial:   ['admin', 'elu'],
+    upload_bulletin:     ['admin', 'agent_com'],
+    manage_members:      ['admin'],
+    view_stats:          ['admin', 'elu', 'agent_com', 'lecteur_admin'],
+  }
+  return matrix[action]?.includes(role) ?? false
+}
+
+interface CommuneNews {
+  id: string
+  organisation_id: string
+  title: string
+  content: string
+  category: 'info' | 'travaux' | 'evenement' | 'urgence'
+  author_name?: string
+  published_at: string
+  created_by?: string
+  is_published: boolean
+}
+
+interface CommuneEvent {
+  id: string
+  organisation_id: string
+  title: string
+  description?: string
+  event_date: string
+  end_date?: string
+  location?: string
+  category: 'conseil' | 'fete' | 'marche' | 'reunion' | 'autre'
+  created_by?: string
+  is_published: boolean
 }
 
 const MOCK_ORGANISATIONS: Organisation[] = [
@@ -2053,10 +2115,10 @@ function nameToInitials(name: string): string {
 
 function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, onNavigateCommune, userHash, userEmail }: {
   onLogout: () => void
-  onNavigateElu: (commune: Organisation) => void
+  onNavigateElu: (commune: Organisation, role: CommuneRole) => void
   onNavigateOrg: (org: Organisation) => void
   onNavigateAdmin: () => void
-  onNavigateCommune: (commune: Organisation, role: 'member' | 'admin') => void
+  onNavigateCommune: (commune: Organisation, role: CommuneRole) => void
   userHash: string
   userEmail: string
 }) {
@@ -2111,7 +2173,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   const [joinedCommuneIds, setJoinedCommuneIds] = useState<Set<string>>(new Set())
   const [joinedCommunes, setJoinedCommunes]     = useState<Organisation[]>([])
   const [joinedOrgs, setJoinedOrgs]             = useState<Organisation[]>([])
-  const [communeRoles, setCommuneRoles]         = useState<Record<string, 'member' | 'admin'>>({})
+  const [communeRoles, setCommuneRoles]         = useState<Record<string, CommuneRole>>({})
 
 
 
@@ -2193,9 +2255,12 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
           const ids = rows.map(r => r.organisation_id)
           setJoinedCommuneIds(new Set(ids))
           // Build role map (default: 'member' if column absent)
-          const roleMap: Record<string, 'member' | 'admin'> = {}
+          const roleMap: Record<string, CommuneRole> = {}
           for (const r of rows) {
-            roleMap[r.organisation_id] = r.role === 'admin' ? 'admin' : 'member'
+            const v = r.role as string
+            roleMap[r.organisation_id] = (['admin','elu','agent_com','lecteur_admin'] as CommuneRole[]).includes(v as CommuneRole)
+              ? (v as CommuneRole)
+              : 'member'
           }
           setCommuneRoles(roleMap)
           // Fetch full org objects for all types in one query, then split
@@ -2517,9 +2582,9 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
                     </div>
                   </div>
                 )}
-                {role === 'admin' && commune.abonnement && (
+                {canDo(role, 'create_consultation') && commune.abonnement && (
                   <button
-                    onClick={() => onNavigateElu(commune)}
+                    onClick={() => onNavigateElu(commune, role)}
                     className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-white active:scale-95 transition-all shadow-sm"
                     style={{ backgroundColor: '#0c447c' }}
                   >
@@ -3264,7 +3329,7 @@ interface LocalConsultation {
   votes_blanc: number
 }
 
-function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: () => void }) {
+function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation; userRole: CommuneRole; onBack: () => void }) {
   const [memberCount, setMemberCount]       = useState<number | null>(null)
   const [nationalLaws, setNationalLaws]     = useState<Proposal[]>([])
   const [consultations, setConsultations]   = useState<LocalConsultation[]>([])
@@ -3278,6 +3343,62 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
   const [formDescription, setFormDescription] = useState('')
   const [formDuration, setFormDuration]     = useState(30)
   const [submitting, setSubmitting]         = useState(false)
+
+  // Member management (admin only)
+  interface TeamMember { id: string; user_hash: string; role: CommuneRole; created_at: string }
+  const [teamMembers, setTeamMembers]           = useState<TeamMember[]>([])
+  const [loadingTeam, setLoadingTeam]           = useState(false)
+  const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!canDo(userRole, 'manage_members')) return
+    let cancelled = false
+    async function fetchTeam() {
+      setLoadingTeam(true)
+      try {
+        const { data } = await supabase
+          .from('citizen_organisations')
+          .select('id, user_hash, role, created_at')
+          .eq('organisation_id', commune.id)
+          .order('created_at', { ascending: false })
+        if (!cancelled && data) setTeamMembers(data as TeamMember[])
+      } catch { /* ignore */ } finally {
+        if (!cancelled) setLoadingTeam(false)
+      }
+    }
+    fetchTeam()
+    return () => { cancelled = true }
+  }, [commune.id, userRole])
+
+  async function handleRoleChange(memberId: string, newRole: CommuneRole) {
+    setUpdatingMemberId(memberId)
+    try {
+      const { error } = await supabase
+        .from('citizen_organisations')
+        .update({ role: newRole })
+        .eq('id', memberId)
+      if (error) throw error
+      setTeamMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
+    } catch {
+      showToast('Une erreur est survenue. Réessayez.')
+    }
+    setUpdatingMemberId(null)
+  }
+
+  async function handleRemoveMember(memberId: string) {
+    setUpdatingMemberId(memberId)
+    try {
+      const { error } = await supabase
+        .from('citizen_organisations')
+        .delete()
+        .eq('id', memberId)
+      if (error) throw error
+      setTeamMembers(prev => prev.filter(m => m.id !== memberId))
+    } catch {
+      showToast('Une erreur est survenue. Réessayez.')
+    }
+    setUpdatingMemberId(null)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -3531,7 +3652,61 @@ function ElectedDashboard({ commune, onBack }: { commune: Organisation; onBack: 
               })}
             </div>
           )}
-        </div>
+          {/* Member management — admin only */}
+        {canDo(userRole, 'manage_members') && (
+          <div className="mb-8">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Gestion de l'équipe</h2>
+            {loadingTeam ? (
+              <div className="space-y-2">
+                {[1, 2].map(i => <div key={i} className="h-12 bg-white rounded-2xl border border-slate-100 animate-pulse" />)}
+              </div>
+            ) : teamMembers.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-100 p-5 text-center">
+                <p className="text-sm text-slate-400">Aucun membre enregistré</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {teamMembers.map(m => {
+                  const ROLE_LABELS: Record<CommuneRole, string> = {
+                    admin:        'Administrateur',
+                    elu:          'Élu(e)',
+                    agent_com:    'Agent comm.',
+                    lecteur_admin:'Lecteur admin',
+                    member:       'Habitant',
+                  }
+                  return (
+                    <div key={m.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-mono text-slate-500 truncate">{m.user_hash.slice(0, 16)}…</p>
+                        <p className="text-xs text-slate-400">{m.created_at?.slice(0, 10)}</p>
+                      </div>
+                      <select
+                        value={m.role}
+                        onChange={e => handleRoleChange(m.id, e.target.value as CommuneRole)}
+                        disabled={updatingMemberId === m.id}
+                        className="text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg px-2 py-1.5 outline-none cursor-pointer disabled:opacity-50"
+                      >
+                        {(Object.entries(ROLE_LABELS) as [CommuneRole, string][]).map(([k, v]) => (
+                          <option key={k} value={k}>{v}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleRemoveMember(m.id)}
+                        disabled={updatingMemberId === m.id}
+                        className="flex-shrink-0 w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-400 hover:bg-red-100 active:scale-95 transition-all disabled:opacity-40"
+                      >
+                        {updatingMemberId === m.id
+                          ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                          : <Trash2 size={12} />}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       </div>
 
       {/* Create consultation modal */}
@@ -4812,11 +4987,13 @@ function LibraryPage() {
 // ── Commune Page ───────────────────────────────────────────────
 function CommunePage({ commune, userRole, userHash, onBack }: {
   commune: Organisation
-  userRole: 'member' | 'admin'
+  userRole: CommuneRole
   userHash: string
   onBack: () => void
 }) {
-  const [tab, setTab] = useState<'consultations' | 'archives' | 'actus'>('consultations')
+  const [tab, setTab] = useState<'consultations' | 'archives' | 'actus' | 'agenda'>('consultations')
+
+  // Consultations / archives
   const [activeProposals,   setActiveProposals]   = useState<Proposal[]>([])
   const [archivedProposals, setArchivedProposals] = useState<Proposal[]>([])
   const [loading,           setLoading]           = useState(true)
@@ -4825,6 +5002,28 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
   const [votedChoices,      setVotedChoices]      = useState<Record<string, VoteChoice>>({})
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
 
+  // Actualités (news)
+  const [news, setNews]             = useState<CommuneNews[]>([])
+  const [loadingNews, setLoadingNews] = useState(true)
+  const [showNewsForm, setShowNewsForm] = useState(false)
+  const [newsTitle, setNewsTitle]   = useState('')
+  const [newsContent, setNewsContent] = useState('')
+  const [newsCategory, setNewsCategory] = useState<CommuneNews['category']>('info')
+  const [submittingNews, setSubmittingNews] = useState(false)
+
+  // Agenda
+  const [events, setEvents]         = useState<CommuneEvent[]>([])
+  const [loadingEvents, setLoadingEvents] = useState(true)
+  const [showEventForm, setShowEventForm] = useState(false)
+  const [evTitle, setEvTitle]       = useState('')
+  const [evDesc, setEvDesc]         = useState('')
+  const [evDate, setEvDate]         = useState('')
+  const [evEndDate, setEvEndDate]   = useState('')
+  const [evLocation, setEvLocation] = useState('')
+  const [evCategory, setEvCategory] = useState<CommuneEvent['category']>('reunion')
+  const [submittingEvent, setSubmittingEvent] = useState(false)
+
+  // Fetch proposals
   useEffect(() => {
     let cancelled = false
     async function fetchProposals() {
@@ -4844,14 +5043,47 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
             .order('created_at', { ascending: false }),
         ])
         if (!cancelled) {
-          if (activeRes.data)   setActiveProposals((activeRes.data as ProposalRow[]).map(mapRowToProposal))
-          if (archiveRes.data)  setArchivedProposals((archiveRes.data as ProposalRow[]).map(mapRowToProposal))
+          if (activeRes.data)  setActiveProposals((activeRes.data as ProposalRow[]).map(mapRowToProposal))
+          if (archiveRes.data) setArchivedProposals((archiveRes.data as ProposalRow[]).map(mapRowToProposal))
         }
       } catch { /* fallback vide */ } finally {
         if (!cancelled) setLoading(false)
       }
     }
     fetchProposals()
+    return () => { cancelled = true }
+  }, [commune.id])
+
+  // Fetch news
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('commune_news')
+      .select('*')
+      .eq('organisation_id', commune.id)
+      .eq('is_published', true)
+      .order('published_at', { ascending: false })
+      .then(({ data }) => {
+        if (!cancelled && data) setNews(data as CommuneNews[])
+        if (!cancelled) setLoadingNews(false)
+      })
+    return () => { cancelled = true }
+  }, [commune.id])
+
+  // Fetch events (upcoming first)
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('commune_agenda')
+      .select('*')
+      .eq('organisation_id', commune.id)
+      .eq('is_published', true)
+      .gte('event_date', new Date().toISOString())
+      .order('event_date', { ascending: true })
+      .then(({ data }) => {
+        if (!cancelled && data) setEvents(data as CommuneEvent[])
+        if (!cancelled) setLoadingEvents(false)
+      })
     return () => { cancelled = true }
   }, [commune.id])
 
@@ -4868,8 +5100,89 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
     setResultsProposalId(proposalId)
   }, [])
 
-  void userRole // disponible pour futures restrictions d'affichage
-  void userHash
+  async function handlePublishNews() {
+    if (!newsTitle.trim() || !newsContent.trim()) return
+    setSubmittingNews(true)
+    const draft: CommuneNews = {
+      id: `draft-${Date.now()}`,
+      organisation_id: commune.id,
+      title: newsTitle,
+      content: newsContent,
+      category: newsCategory,
+      published_at: new Date().toISOString(),
+      is_published: true,
+      created_by: userHash,
+    }
+    setNews(prev => [draft, ...prev])
+    setShowNewsForm(false)
+    setNewsTitle(''); setNewsContent('')
+    try {
+      const { error } = await supabase.from('commune_news').insert({
+        organisation_id: commune.id,
+        title: newsTitle,
+        content: newsContent,
+        category: newsCategory,
+        is_published: true,
+        created_by: userHash,
+      })
+      if (error) throw error
+    } catch {
+      showToast('Une erreur est survenue. Réessayez.')
+    }
+    setSubmittingNews(false)
+  }
+
+  async function handlePublishEvent() {
+    if (!evTitle.trim() || !evDate) return
+    setSubmittingEvent(true)
+    const draft: CommuneEvent = {
+      id: `draft-${Date.now()}`,
+      organisation_id: commune.id,
+      title: evTitle,
+      description: evDesc || undefined,
+      event_date: evDate,
+      end_date: evEndDate || undefined,
+      location: evLocation || undefined,
+      category: evCategory,
+      is_published: true,
+      created_by: userHash,
+    }
+    setEvents(prev => [...prev, draft].sort((a, b) => a.event_date.localeCompare(b.event_date)))
+    setShowEventForm(false)
+    setEvTitle(''); setEvDesc(''); setEvDate(''); setEvEndDate(''); setEvLocation('')
+    try {
+      const { error } = await supabase.from('commune_agenda').insert({
+        organisation_id: commune.id,
+        title: evTitle,
+        description: evDesc || null,
+        event_date: evDate,
+        end_date: evEndDate || null,
+        location: evLocation || null,
+        category: evCategory,
+        is_published: true,
+        created_by: userHash,
+      })
+      if (error) throw error
+    } catch {
+      showToast('Une erreur est survenue. Réessayez.')
+    }
+    setSubmittingEvent(false)
+  }
+
+  const NEWS_CATEGORY_STYLE: Record<CommuneNews['category'], { label: string; bg: string; text: string }> = {
+    info:      { label: 'Info',     bg: 'bg-blue-100',   text: 'text-blue-700' },
+    travaux:   { label: 'Travaux',  bg: 'bg-orange-100', text: 'text-orange-700' },
+    evenement: { label: 'Événement',bg: 'bg-green-100',  text: 'text-green-700' },
+    urgence:   { label: 'Urgence',  bg: 'bg-red-100',    text: 'text-red-700' },
+  }
+
+  const EVENT_CATEGORY_STYLE: Record<CommuneEvent['category'], { label: string; bg: string; text: string }> = {
+    conseil: { label: 'Conseil',   bg: 'bg-indigo-100', text: 'text-indigo-700' },
+    fete:    { label: 'Fête',      bg: 'bg-purple-100', text: 'text-purple-700' },
+    marche:  { label: 'Marché',    bg: 'bg-amber-100',  text: 'text-amber-700' },
+    reunion: { label: 'Réunion',   bg: 'bg-slate-100',  text: 'text-slate-700' },
+    autre:   { label: 'Autre',     bg: 'bg-gray-100',   text: 'text-gray-600' },
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -4901,18 +5214,21 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-200 mx-4 mt-4 rounded-xl p-1">
+      {/* Tabs — scrollable so 4 items fit on mobile */}
+      <div className="flex gap-1 overflow-x-auto px-4 mt-4 pb-1" style={{ scrollbarWidth: 'none' }}>
         {([
           { key: 'consultations' as const, label: 'Consultations' },
           { key: 'archives'      as const, label: 'Archives'      },
           { key: 'actus'         as const, label: 'Actualités'    },
+          { key: 'agenda'        as const, label: 'Agenda'        },
         ]).map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-              tab === t.key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
+            className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              tab === t.key
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-slate-200 text-slate-500'
             }`}
           >
             {t.label}
@@ -4921,7 +5237,7 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
       </div>
 
       <div className="p-4">
-        {/* Onglet 1 — Consultations actives */}
+        {/* ── Consultations actives ── */}
         {tab === 'consultations' && (
           loading ? (
             <div className="space-y-4">
@@ -4953,7 +5269,7 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
           )
         )}
 
-        {/* Onglet 2 — Archives */}
+        {/* ── Archives ── */}
         {tab === 'archives' && (
           loading ? (
             <div className="space-y-3">
@@ -5008,13 +5324,272 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
           )
         )}
 
-        {/* Onglet 3 — Actualités (placeholder) */}
+        {/* ── Actualités ── */}
         {tab === 'actus' && (
-          <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
-            <Newspaper size={32} className="text-slate-200 mx-auto mb-3" />
-            <p className="text-sm text-slate-500 font-medium">Les actualités de votre commune arrivent bientôt</p>
-            <p className="text-xs text-slate-300 mt-1">Restez informé des décisions et événements locaux</p>
-          </div>
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-slate-700">Actualités de {commune.name}</h2>
+              {canDo(userRole, 'publish_news') && (
+                <button
+                  onClick={() => setShowNewsForm(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white active:scale-95 transition-all"
+                >
+                  <Plus size={12} />
+                  Publier
+                </button>
+              )}
+            </div>
+
+            {loadingNews ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 animate-pulse">
+                    <div className="h-3 bg-slate-100 rounded w-1/3 mb-2" />
+                    <div className="h-4 bg-slate-100 rounded w-3/4 mb-1" />
+                    <div className="h-3 bg-slate-100 rounded w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : news.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
+                <Newspaper size={32} className="text-slate-200 mx-auto mb-3" />
+                <p className="text-sm text-slate-400 font-medium">Aucune actualité publiée</p>
+                {canDo(userRole, 'publish_news') && (
+                  <p className="text-xs text-slate-300 mt-1">Publiez la première actualité de votre commune</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {news.map(item => {
+                  const style = NEWS_CATEGORY_STYLE[item.category]
+                  return (
+                    <div key={item.id} className="bg-white rounded-2xl border border-slate-100 p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${style.bg} ${style.text}`}>
+                          {style.label}
+                        </span>
+                        <span className="text-xs text-slate-400 ml-auto">
+                          {new Date(item.published_at).toLocaleDateString('fr-FR')}
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-slate-800 text-sm leading-snug mb-1">{item.title}</h3>
+                      <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{item.content}</p>
+                      {item.author_name && (
+                        <p className="text-xs text-slate-400 mt-2">— {item.author_name}</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Formulaire publication */}
+            {showNewsForm && (
+              <div className="fixed inset-0 z-50 bg-black/50 flex items-end p-4">
+                <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                    <h3 className="font-bold text-slate-800 text-sm">Publier une actualité</h3>
+                    <button onClick={() => setShowNewsForm(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                      <X size={15} className="text-slate-500" />
+                    </button>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Catégorie</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {(Object.entries(NEWS_CATEGORY_STYLE) as [CommuneNews['category'], { label: string; bg: string; text: string }][]).map(([k, v]) => (
+                          <button
+                            key={k}
+                            onClick={() => setNewsCategory(k)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                              newsCategory === k ? `${v.bg} ${v.text} border-current` : 'border-slate-200 text-slate-500 bg-white'
+                            }`}
+                          >
+                            {v.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Titre</label>
+                      <input
+                        type="text"
+                        value={newsTitle}
+                        onChange={e => setNewsTitle(e.target.value)}
+                        placeholder="Titre de l'actualité"
+                        className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Contenu</label>
+                      <textarea
+                        value={newsContent}
+                        onChange={e => setNewsContent(e.target.value)}
+                        placeholder="Rédigez votre actualité..."
+                        rows={4}
+                        className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="px-5 pb-5 flex gap-3">
+                    <button onClick={() => setShowNewsForm(false)} className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm">Annuler</button>
+                    <button
+                      onClick={handlePublishNews}
+                      disabled={!newsTitle.trim() || !newsContent.trim() || submittingNews}
+                      className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                    >
+                      {submittingNews
+                        ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        : 'Publier'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Agenda ── */}
+        {tab === 'agenda' && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-slate-700">Agenda de {commune.name}</h2>
+              {canDo(userRole, 'publish_agenda') && (
+                <button
+                  onClick={() => setShowEventForm(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white active:scale-95 transition-all"
+                >
+                  <Plus size={12} />
+                  Ajouter
+                </button>
+              )}
+            </div>
+
+            {loadingEvents ? (
+              <div className="space-y-3">
+                {[1, 2].map(i => (
+                  <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 animate-pulse">
+                    <div className="h-8 bg-slate-100 rounded w-1/4 mb-3" />
+                    <div className="h-4 bg-slate-100 rounded w-2/3 mb-1" />
+                    <div className="h-3 bg-slate-100 rounded w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : events.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
+                <Info size={32} className="text-slate-200 mx-auto mb-3" />
+                <p className="text-sm text-slate-400 font-medium">Aucun événement à venir</p>
+                {canDo(userRole, 'publish_agenda') && (
+                  <p className="text-xs text-slate-300 mt-1">Ajoutez le premier événement de votre commune</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {events.map(ev => {
+                  const style = EVENT_CATEGORY_STYLE[ev.category]
+                  const d = new Date(ev.event_date)
+                  const dayStr   = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+                  const timeStr  = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                  return (
+                    <div key={ev.id} className="bg-white rounded-2xl border border-slate-100 p-4 flex gap-4">
+                      <div className="flex-shrink-0 text-center w-14">
+                        <p className="text-2xl font-black text-indigo-600 leading-none">{d.getDate()}</p>
+                        <p className="text-xs text-slate-400 font-medium uppercase">
+                          {d.toLocaleDateString('fr-FR', { month: 'short' })}
+                        </p>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${style.bg} ${style.text}`}>
+                            {style.label}
+                          </span>
+                        </div>
+                        <h3 className="font-bold text-slate-800 text-sm leading-snug">{ev.title}</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {dayStr} · {timeStr}
+                          {ev.location && ` · ${ev.location}`}
+                        </p>
+                        {ev.description && (
+                          <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2">{ev.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Formulaire agenda */}
+            {showEventForm && (
+              <div className="fixed inset-0 z-50 bg-black/50 flex items-end p-4">
+                <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[85vh] flex flex-col">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+                    <h3 className="font-bold text-slate-800 text-sm">Ajouter un événement</h3>
+                    <button onClick={() => setShowEventForm(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                      <X size={15} className="text-slate-500" />
+                    </button>
+                  </div>
+                  <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Catégorie</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {(Object.entries(EVENT_CATEGORY_STYLE) as [CommuneEvent['category'], { label: string; bg: string; text: string }][]).map(([k, v]) => (
+                          <button
+                            key={k}
+                            onClick={() => setEvCategory(k)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                              evCategory === k ? `${v.bg} ${v.text} border-current` : 'border-slate-200 text-slate-500 bg-white'
+                            }`}
+                          >
+                            {v.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Titre *</label>
+                      <input type="text" value={evTitle} onChange={e => setEvTitle(e.target.value)} placeholder="Titre de l'événement"
+                        className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-300" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Date de début *</label>
+                        <input type="datetime-local" value={evDate} onChange={e => setEvDate(e.target.value)}
+                          className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-300 [color-scheme:light]" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Date de fin</label>
+                        <input type="datetime-local" value={evEndDate} onChange={e => setEvEndDate(e.target.value)}
+                          className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-300 [color-scheme:light]" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Lieu</label>
+                      <input type="text" value={evLocation} onChange={e => setEvLocation(e.target.value)} placeholder="Salle des fêtes, mairie…"
+                        className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-300" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Description</label>
+                      <textarea value={evDesc} onChange={e => setEvDesc(e.target.value)} rows={3} placeholder="Décrivez l'événement…"
+                        className="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+                    </div>
+                  </div>
+                  <div className="px-5 pb-5 flex gap-3 flex-shrink-0">
+                    <button onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm">Annuler</button>
+                    <button
+                      onClick={handlePublishEvent}
+                      disabled={!evTitle.trim() || !evDate || submittingEvent}
+                      className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                    >
+                      {submittingEvent
+                        ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        : 'Ajouter'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -5053,7 +5628,8 @@ export default function App() {
   const [selectedCommune, setSelectedCommune]           = useState<Organisation | null>(null)
   const [selectedOrg, setSelectedOrg]                   = useState<Organisation | null>(null)
   const [selectedCommunePage, setSelectedCommunePage]   = useState<Organisation | null>(null)
-  const [communePageRole, setCommunePageRole]           = useState<'member' | 'admin'>('member')
+  const [communePageRole, setCommunePageRole]           = useState<CommuneRole>('member')
+  const [communeEluRole, setCommuneEluRole]             = useState<CommuneRole>('admin')
   const [userHash, setUserHash]               = useState<string>('')
   const [userEmail, setUserEmail]             = useState<string>('')
   const [toasts, setToasts]                   = useState<ToastEntry[]>([])
@@ -5132,7 +5708,32 @@ export default function App() {
       setIsLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    // iOS PWA: when the user returns to the app after clicking the magic link in Safari,
+    // Safari has already stored the session in localStorage (shared origin on iOS 14.3+).
+    // Re-check on every visibility-restored event so the app picks it up without a reload.
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible') return
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) return
+      try {
+        const saved = localStorage.getItem('choisissons-auth')
+        if (saved) {
+          const parsed = JSON.parse(saved) as { access_token?: string; refresh_token?: string }
+          if (parsed?.access_token && parsed?.refresh_token) {
+            await supabase.auth.setSession({
+              access_token: parsed.access_token,
+              refresh_token: parsed.refresh_token,
+            })
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
 
   useEffect(() => {
@@ -5162,8 +5763,9 @@ export default function App() {
     setActivePage('home')
   }
 
-  const handleNavigateElu = (commune: Organisation) => {
+  const handleNavigateElu = (commune: Organisation, role: CommuneRole) => {
     setSelectedCommune(commune)
+    setCommuneEluRole(role)
     setActivePage('elu')
   }
 
@@ -5172,7 +5774,7 @@ export default function App() {
     setActivePage('org')
   }
 
-  const handleNavigateCommune = (commune: Organisation, role: 'member' | 'admin') => {
+  const handleNavigateCommune = (commune: Organisation, role: CommuneRole) => {
     setSelectedCommunePage(commune)
     setCommunePageRole(role)
     setActivePage('commune')
@@ -5198,6 +5800,7 @@ export default function App() {
         <div className="max-w-md mx-auto md:max-w-[900px] xl:max-w-[1100px] min-h-screen overflow-y-auto">
           <ElectedDashboard
             commune={selectedCommune}
+            userRole={communeEluRole}
             onBack={() => setActivePage('profile')}
           />
         </div>
