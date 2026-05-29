@@ -399,6 +399,8 @@ function LoginScreen() {
   const [certifie, setCertifie]       = useState(false)
   const [sending, setSending]         = useState(false)
   const [sent, setSent]               = useState(false)
+  const [otp, setOtp]                 = useState('')
+  const [verifying, setVerifying]     = useState(false)
   const [activeStep, setActiveStep]   = useState<number | null>(null)
   const [showAbout, setShowAbout]     = useState(false)
 
@@ -431,17 +433,33 @@ function LoginScreen() {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
-        emailRedirectTo: 'https://choisissons.fr',
         shouldCreateUser: true,
+        // No emailRedirectTo → Supabase sends a 6-digit OTP code instead of a magic link.
+        // This keeps the user inside the PWA and avoids the Safari/PWA localStorage split on iPhone.
       },
     })
     if (error) {
-      showToast("Impossible d'envoyer le lien. Vérifiez votre adresse email.")
+      showToast("Impossible d'envoyer le code. Vérifiez votre adresse email.")
       setSending(false)
     } else {
       setSent(true)
       setSending(false)
     }
+  }
+
+  const handleVerifyOtp = async () => {
+    if (otp.length < 6 || verifying) return
+    setVerifying(true)
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: otp,
+      type: 'email',
+    })
+    if (error) {
+      showToast('Code invalide ou expiré. Vérifiez votre email.')
+      setVerifying(false)
+    }
+    // On success, onAuthStateChange fires SIGNED_IN → login flow completes automatically
   }
 
   return (
@@ -472,26 +490,43 @@ function LoginScreen() {
           ))}
         </div>
 
-        {/* Magic Link form */}
+        {/* OTP form */}
         {sent ? (
-          <div className="bg-white/10 rounded-2xl p-5 text-center border border-white/20">
-            <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center mx-auto mb-3">
-              <CheckCircle size={24} className="text-white" />
+          <div className="bg-white/10 rounded-2xl p-5 border border-white/20">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                <CheckCircle size={20} className="text-white" />
+              </div>
+              <div>
+                <p className="text-white font-bold text-sm leading-tight">Code envoyé !</p>
+                <p className="text-indigo-200 text-xs mt-0.5">
+                  Consultez <span className="font-semibold text-white">{email}</span>
+                </p>
+              </div>
             </div>
-            <p className="text-white font-bold text-base mb-1">Vérifiez votre boîte mail</p>
-            <p className="text-indigo-200 text-xs leading-relaxed mb-3">
-              Un lien de connexion a été envoyé à{' '}
-              <span className="font-semibold text-white">{email}</span>
-            </p>
-            {((window.navigator as { standalone?: boolean }).standalone === true ||
-              window.matchMedia('(display-mode: standalone)').matches) && (
-              <p className="text-amber-300 text-xs leading-relaxed mb-3 bg-amber-900/30 rounded-xl px-3 py-2">
-                Sur iPhone : le lien s'ouvrira dans Safari. Après connexion, revenez sur cette application — elle se connectera automatiquement.
-              </p>
-            )}
+            <input
+              type="text"
+              inputMode="numeric"
+              value={otp}
+              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onKeyDown={e => e.key === 'Enter' && void handleVerifyOtp()}
+              placeholder="• • • • • •"
+              maxLength={6}
+              autoFocus
+              className="w-full bg-white/10 border border-white/20 text-white placeholder-indigo-400 rounded-xl px-4 py-3.5 text-center text-2xl font-bold tracking-[0.4em] outline-none focus:ring-2 focus:ring-indigo-300 mb-3"
+            />
             <button
-              onClick={() => setSent(false)}
-              className="text-indigo-300 text-xs underline underline-offset-2 hover:text-indigo-100 transition-colors"
+              onClick={() => void handleVerifyOtp()}
+              disabled={otp.length < 6 || verifying}
+              className="w-full bg-indigo-500 text-white rounded-xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2 shadow-xl hover:bg-indigo-400 active:scale-95 transition-all disabled:opacity-50 mb-3"
+            >
+              {verifying
+                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : 'Vérifier le code'}
+            </button>
+            <button
+              onClick={() => { setSent(false); setOtp('') }}
+              className="w-full text-indigo-300 text-xs underline underline-offset-2 hover:text-indigo-100 transition-colors"
             >
               Changer d'adresse email
             </button>
@@ -547,22 +582,18 @@ function LoginScreen() {
               {sending ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                'Recevoir mon lien de connexion'
+                'Recevoir mon code de connexion'
               )}
             </button>
             <p className="text-center text-indigo-300/80 text-xs mt-3 leading-relaxed">
-              Si vous avez déjà un compte, entrez votre email pour recevoir un nouveau lien de connexion.
-              Le lien est valable 24h et fonctionne une seule fois.
+              Si vous avez déjà un compte, entrez votre email pour recevoir un nouveau code à 6 chiffres.
+              Le code est valable 1 heure et fonctionne une seule fois.
             </p>
           </>
         )}
 
         <p className="text-center text-indigo-400 text-xs mt-3">
           Connexion sécurisée sans mot de passe · Phase 2 : FranceConnect
-        </p>
-
-        <p className="text-center text-amber-300/80 text-xs mt-2 leading-relaxed">
-          Ouvrez le lien depuis votre navigateur principal (Safari ou Chrome), pas depuis l'app Mail.
         </p>
 
         <button
@@ -991,11 +1022,12 @@ function ResultsModal({ proposalId, onClose }: { proposalId: string; onClose: ()
 }
 
 // ── Proposal Card ──────────────────────────────────────────────
-function ProposalCard({ proposal, onOpen, currentVote, onRevote }: {
+function ProposalCard({ proposal, onOpen, currentVote, onRevote, hasAlreadyVoted }: {
   proposal: Proposal
   onOpen: () => void
   currentVote?: VoteChoice
   onRevote?: () => void
+  hasAlreadyVoted?: boolean
 }) {
   const total    = proposal.votes.pour + proposal.votes.contre + proposal.votes.blanc
   const progress = Math.min((proposal.signatures / proposal.targetSignatures) * 100, 100)
@@ -1096,23 +1128,29 @@ function ProposalCard({ proposal, onOpen, currentVote, onRevote }: {
             <Users size={15} />
             Vote disponible après validation du Jury
           </button>
-        ) : proposal.stage === 'voting' && currentVote ? (
+        ) : proposal.stage === 'voting' && (currentVote || hasAlreadyVoted) ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-              <span className="text-sm text-slate-600">
-                Vous avez voté{' '}
-                <span className={`font-semibold px-1.5 py-0.5 rounded-full text-xs ${VOTE_CHOICE_BADGE[currentVote]}`}>
-                  {VOTE_CHOICE_LABEL[currentVote]}
+              {currentVote ? (
+                <span className="text-sm text-slate-600">
+                  Vous avez voté{' '}
+                  <span className={`font-semibold px-1.5 py-0.5 rounded-full text-xs ${VOTE_CHOICE_BADGE[currentVote]}`}>
+                    {VOTE_CHOICE_LABEL[currentVote]}
+                  </span>
                 </span>
-              </span>
+              ) : (
+                <span className="text-sm text-slate-500">Vous avez déjà voté sur cette proposition</span>
+              )}
             </div>
-            <button
-              onClick={onRevote}
-              className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors active:scale-95"
-            >
-              Changer mon vote
-            </button>
+            {currentVote && (
+              <button
+                onClick={onRevote}
+                className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors active:scale-95"
+              >
+                Changer mon vote
+              </button>
+            )}
           </div>
         ) : (
           <button
@@ -1286,6 +1324,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   const [lawVotedIds, setLawVotedIds] = useState<Set<string>>(new Set())
   const [agoraLaw, setAgoraLaw]     = useState<Proposal | null>(null)
   const [votingLaw, setVotingLaw]   = useState<Proposal | null>(null)
+  const [votedIds, setVotedIds]     = useState<Set<string>>(new Set())
 
   // Fetch lois from Assemblée Nationale API, fall back to hardcoded data silently
   useEffect(() => {
@@ -1320,6 +1359,19 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     fetchProposals()
     return () => { cancelled = true }
   }, [])
+
+  // Hydrate voted IDs on mount so the "already voted" state survives page reloads.
+  // Choices are not fetched — votes are anonymous by design.
+  useEffect(() => {
+    if (!userHash) return
+    let cancelled = false
+    supabase.rpc('get_my_votes', { p_user_hash: userHash }).then(({ data }) => {
+      if (!cancelled && data) {
+        setVotedIds(new Set((data as { proposal_id: string | number }[]).map(r => String(r.proposal_id))))
+      }
+    })
+    return () => { cancelled = true }
+  }, [userHash])
 
   const filtered = useMemo(() =>
     proposals.filter(p => {
@@ -1564,6 +1616,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
                     proposal={proposal}
                     onOpen={() => setAgoraProposal(proposal)}
                     currentVote={votedChoices[proposal.id]}
+                    hasAlreadyVoted={votedIds.has(proposal.id)}
                     onRevote={() => setVotingProposal(proposal)}
                   />
                 ))}
@@ -1701,6 +1754,7 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
   const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
   const [votedChoices, setVotedChoices]     = useState<Record<string, VoteChoice>>({})
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
+  const [votedIds, setVotedIds]             = useState<Set<string>>(new Set())
 
   // Organisations tab state
   const [orgSubTab, setOrgSubTab] = useState<'commune' | 'ong' | 'media'>('commune')
@@ -1728,6 +1782,17 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
     fetchExploreData()
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (!userHash) return
+    let cancelled = false
+    supabase.rpc('get_my_votes', { p_user_hash: userHash }).then(({ data }) => {
+      if (!cancelled && data) {
+        setVotedIds(new Set((data as { proposal_id: string | number }[]).map(r => String(r.proposal_id))))
+      }
+    })
+    return () => { cancelled = true }
+  }, [userHash])
 
   // Fetch organisations by sub-tab type + existing follows
   useEffect(() => {
@@ -1949,6 +2014,7 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
                   proposal={proposal}
                   onOpen={() => setAgoraProposal(proposal)}
                   currentVote={votedChoices[proposal.id]}
+                  hasAlreadyVoted={votedIds.has(proposal.id)}
                   onRevote={() => setVotingProposal(proposal)}
                 />
               ))}
