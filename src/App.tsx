@@ -193,6 +193,8 @@ function savePendingVotes(votes: PendingVote[]) {
 async function flushPendingVotes() {
   const pending = loadPendingVotes()
   if (pending.length === 0) return
+  const { data: { session } } = await supabase.auth.getSession()
+  const flushAuthToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
   const remaining: PendingVote[] = []
   for (const v of pending) {
     try {
@@ -211,7 +213,7 @@ async function flushPendingVotes() {
           headers: {
             'Content-Type': 'application/json',
             'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${flushAuthToken}`,
           },
           body: JSON.stringify(flushParams),
         }
@@ -1321,7 +1323,12 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
 
   // ── Lois en cours state ────────────────────────────────────────
   const [laws, setLaws]             = useState<ParliamentaryLaw[]>(PARLIAMENTARY_LAWS_INITIAL)
-  const [lawVotedIds, setLawVotedIds] = useState<Set<string>>(new Set())
+  const [lawVotedIds, setLawVotedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('law_voted_ids')
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+    } catch { return new Set() }
+  })
   const [agoraLaw, setAgoraLaw]     = useState<Proposal | null>(null)
   const [votingLaw, setVotingLaw]   = useState<Proposal | null>(null)
   const [votedIds, setVotedIds]     = useState<Set<string>>(new Set())
@@ -1346,6 +1353,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
           .from('proposals')
           .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof')
           .order('created_at', { ascending: false })
+          .limit(100)
         if (error) throw error
         if (!cancelled && data && data.length > 0) {
           setProposals((data as ProposalRow[]).map(mapRowToProposal))
@@ -1407,6 +1415,18 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
       return
     }
 
+    // Optimistic UI update — applies immediately so the user gets instant feedback
+    // even if the network is slow or offline.
+    setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
+    setProposals(prev =>
+      prev.map(p => {
+        if (p.id !== proposalId) return p
+        const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
+        if (isRevote && oldChoice) newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
+        return { ...p, votes: newVotes }
+      })
+    )
+
     const proof = await generateVoteProof(proposalId, mappedChoice)
     const voteParams = {
       p_proposal_id: numericId,
@@ -1416,7 +1436,6 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     }
     console.log('[deposer_bulletin] params:', voteParams)
 
-    // Use user's auth token so RLS policies let the INSERT through
     const { data: { session } } = await supabase.auth.getSession()
     const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -1437,24 +1456,16 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     if (error) console.log('[deposer_bulletin] error:', error)
 
     if (error) {
+      // DB failed — queue for later sync. UI stays updated (optimistic).
       const pending = loadPendingVotes()
       if (!pending.some(v => v.proposalId === proposalId)) {
         savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
       }
-      showToast('Vote sauvegardé localement. Il sera envoyé à la prochaine connexion.', 'warning')
+      showToast('Réseau faible. Vote sauvegardé et synchronisé à la prochaine connexion.', 'warning')
       return
     }
 
-    // DB write confirmed — update UI
-    setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
-    setProposals(prev =>
-      prev.map(p => {
-        if (p.id !== proposalId) return p
-        const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
-        if (isRevote && oldChoice) newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
-        return { ...p, votes: newVotes }
-      })
-    )
+    // DB confirmed — show bonus feedback
     if (isRevote) {
       showToast('Vote mis à jour ✓', 'info')
     } else {
@@ -1463,7 +1474,11 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   }, [userHash])
 
   const handleLawVoted = useCallback((lawId: string, choice: VoteChoice) => {
-    setLawVotedIds(prev => new Set([...prev, lawId]))
+    setLawVotedIds(prev => {
+      const next = new Set([...prev, lawId])
+      try { localStorage.setItem('law_voted_ids', JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
     setLaws(prev =>
       prev.map(l =>
         l.id !== lawId
@@ -1769,6 +1784,8 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
         const { data, error } = await supabase
           .from('proposals')
           .select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof')
+          .order('created_at', { ascending: false })
+          .limit(100)
         if (error) throw error
         if (!cancelled && data && data.length > 0) {
           setAllProposals((data as ProposalRow[]).map(mapRowToProposal))
@@ -1817,10 +1834,7 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
           }
         }
       } catch {
-        if (!cancelled) {
-          setOrganisations(MOCK_ORGANISATIONS.filter(o => o.type === orgSubTab))
-          showToast('Une erreur est survenue. Réessayez.')
-        }
+        if (!cancelled) showToast('Une erreur est survenue. Réessayez.')
       } finally {
         if (!cancelled) setLoadingOrgs(false)
       }
@@ -3039,10 +3053,7 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
           }
         }
       } catch {
-        if (!cancelled) {
-          setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
-          showToast('Une erreur est survenue. Réessayez.')
-        }
+        if (!cancelled) showToast('Une erreur est survenue. Réessayez.')
       } finally {
         if (!cancelled) setLoadingStats(false)
       }
@@ -3485,10 +3496,7 @@ function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation
           if (consultRes.data) setConsultations(consultRes.data as LocalConsultation[])
         }
       } catch {
-        if (!cancelled) {
-          setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
-          showToast('Une erreur est survenue. Réessayez.')
-        }
+        if (!cancelled) showToast('Une erreur est survenue. Réessayez.')
       } finally {
         if (!cancelled) setLoadingStats(false)
       }
@@ -4777,11 +4785,13 @@ function LibraryPage() {
             .from('proposals')
             .select('id, title, description, category, status, votes_pour, votes_contre, votes_blanc, created_at')
             .in('status', ['adopted', 'rejected', 'closed'])
-            .order('created_at', { ascending: false }),
+            .order('created_at', { ascending: false })
+            .limit(200),
           supabase
             .from('parliamentary_laws')
             .select('id, title, description, category, stage, votes, synced_at')
-            .in('stage', ['adopted', 'rejected', 'closed']),
+            .in('stage', ['adopted', 'rejected', 'closed'])
+            .limit(200),
         ])
         if (cancelled) return
 
