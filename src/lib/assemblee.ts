@@ -56,7 +56,6 @@ const FALLBACK_LAWS: ANLaw[] = [
 
 const CACHE_KEY      = 'an_cache'
 const CACHE_TIME_KEY = 'an_cache_time'
-const CACHE_TTL_MS   = 5 * 60 * 1000
 
 export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
   // Vider le cache pour forcer un rechargement propre depuis Supabase
