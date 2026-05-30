@@ -193,8 +193,6 @@ function savePendingVotes(votes: PendingVote[]) {
 async function flushPendingVotes() {
   const pending = loadPendingVotes()
   if (pending.length === 0) return
-  const { data: { session } } = await supabase.auth.getSession()
-  const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
   const remaining: PendingVote[] = []
   for (const v of pending) {
     try {
@@ -206,20 +204,7 @@ async function flushPendingVotes() {
         p_proof_hash: proof,
       }
       console.log('[deposer_bulletin] flush params:', flushParams)
-      const flushRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(flushParams),
-        }
-      )
-      const data = await flushRes.json()
-      const error = flushRes.ok ? null : data
+      const { data, error } = await supabase.rpc('deposer_bulletin', flushParams)
       if (error) console.log('[deposer_bulletin] flush error:', error)
       // already_voted ou succès → ne pas réessayer
       if (error || (data as { error?: string } | null)?.error === 'already_voted') {
@@ -1416,24 +1401,8 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     }
     console.log('[deposer_bulletin] params:', voteParams)
 
-    const { data: { session } } = await supabase.auth.getSession()
-    const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
-
     try {
-      const voteRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(voteParams),
-        }
-      )
-      const voteResult = await voteRes.json()
-      const error = voteRes.ok ? null : voteResult
+      const { error } = await supabase.rpc('deposer_bulletin', voteParams)
       if (error) console.log('[deposer_bulletin] error:', error)
 
       if (error) {
@@ -1502,26 +1471,8 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
 
       console.log('[deposer_bulletin_loi] params:', voteParams)
 
-      // 3. Récupération du Token
-      const { data: { session } } = await supabase.auth.getSession()
-      const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
-
-      // 4. Envoi sécurisé
-      const voteRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(voteParams),
-        }
-      )
-
-      const voteResult = await voteRes.json()
-      const error = voteRes.ok ? null : voteResult
+      // 3. Envoi sécurisé
+      const { error } = await supabase.rpc('deposer_bulletin', voteParams)
 
       if (error) {
         console.log('[deposer_bulletin_loi] error:', error)
@@ -1929,24 +1880,8 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
       p_proof_hash: proof,
     }
 
-    const { data: { session } } = await supabase.auth.getSession()
-    const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
-
     try {
-      const voteRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(voteParams),
-        }
-      )
-      const voteResult = await voteRes.json()
-      const error = voteRes.ok ? null : voteResult
+      const { error } = await supabase.rpc('deposer_bulletin', voteParams)
 
       if (error) throw new Error('DB Error')
 
@@ -5262,24 +5197,8 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
       p_proof_hash: proof,
     }
 
-    const { data: { session } } = await supabase.auth.getSession()
-    const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
-
     try {
-      const voteRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(voteParams),
-        }
-      )
-      const voteResult = await voteRes.json()
-      const error = voteRes.ok ? null : voteResult
+      const { error } = await supabase.rpc('deposer_bulletin', voteParams)
 
       if (error) throw new Error('DB Error')
 
