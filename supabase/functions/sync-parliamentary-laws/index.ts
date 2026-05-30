@@ -10,7 +10,6 @@ interface LawRow {
   category:             string
   stage:                string
   parliament_vote_date: string | null
-  votes:                { pour: number; contre: number; blanc: number }
   official_url:         string
   synced_at:            string
 }
@@ -98,7 +97,6 @@ function mapDocument(d: unknown, index: number): LawRow | null {
     category:             mapCategory([...themes, title]),
     stage:                calculatedStage,
     parliament_vote_date: voteDate || null,
-    votes:                { pour: 0, contre: 0, blanc: 0 },
     official_url:         officialUrl,
     synced_at:            new Date().toISOString(),
   }
@@ -179,6 +177,58 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     console.error('[sync-parliamentary-laws] RPC Exception:', e)
+  }
+
+  // 5. Fetch scrutins for closed laws missing official results
+  try {
+    const { data: closedLaws } = await supabase
+      .from('parliamentary_laws')
+      .select('id, number, votes')
+      .in('stage', ['closed', 'archived'])
+
+    const lawsToUpdate = (closedLaws || []).filter(l => 
+      l.votes && l.votes.pour === 0 && l.votes.contre === 0 && l.votes.blanc === 0
+    )
+
+    if (lawsToUpdate.length > 0) {
+      console.log(`[sync-parliamentary-laws] ${lawsToUpdate.length} lois nécessitent la récupération des scrutins.`)
+      const scrutinsRes = await fetch('https://data.assemblee-nationale.fr/api/v2/scrutins?legislature=17&limit=200', {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(15000)
+      })
+      
+      if (scrutinsRes.ok) {
+        const scrutinsRaw = await scrutinsRes.json()
+        const scrutins = extractItems(scrutinsRaw)
+
+        for (const law of lawsToUpdate) {
+          const numMatch = String(law.number).match(/(\d+)$/)
+          const shortNum = numMatch ? parseInt(numMatch[1], 10).toString() : null
+
+          const scrutin = scrutins.find(s => {
+            const r = s as Record<string, any>
+            const text = `${r.titre} ${r.objet} ${r.uid}`.toLowerCase()
+            return shortNum && text.includes(shortNum)
+          })
+
+          if (scrutin) {
+            const r = scrutin as Record<string, any>
+            const pour = r.syntheseVote?.nombrePour ?? r.decompte?.pour ?? 0
+            const contre = r.syntheseVote?.nombreContre ?? r.decompte?.contre ?? 0
+            const blanc = r.syntheseVote?.nombreAbstentions ?? r.decompte?.abstentions ?? 0
+
+            if (pour > 0 || contre > 0 || blanc > 0) {
+              await supabase.from('parliamentary_laws').update({ votes: { pour, contre, blanc } }).eq('id', law.id)
+              console.log(`[sync-parliamentary-laws] Scrutin AN mis à jour pour ${law.number} : ${pour} Pour, ${contre} Contre`)
+              synced++
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[sync-parliamentary-laws] Erreur récupération scrutins:', e)
+    errors++
   }
 
   const result = { synced, errors, timestamp: new Date().toISOString() }
