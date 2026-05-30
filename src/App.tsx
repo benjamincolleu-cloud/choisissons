@@ -1313,8 +1313,8 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
         <button
           onClick={onOpen}
           className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${isClosed
-              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              : 'bg-[#002395] text-white shadow-md shadow-blue-200'
+            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            : 'bg-[#002395] text-white shadow-md shadow-blue-200'
             }`}
         >
           {isClosed ? <Info size={15} /> : <Vote size={15} />}
@@ -2826,7 +2826,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
           <div className="space-y-2">
             {myProposals.map(p => {
               const stageEmoji: Record<Stage, string> = {
-                seedling: '🌱', review: '🔍', voting: '🗳️', adopted: '✅', rejected: '❌', closed: '⛓️'
+                seedling: '🌱', review: '🔍', voting: '🗳️', adopted: '✅', rejected: '❌', closed: '⛓️', archived: '📚'
               }
               const soutiens = p.supports ?? 0
               const pct = Math.min(100, (soutiens / 10) * 100)
@@ -3210,6 +3210,8 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
     review: { text: 'Jury', color: 'bg-amber-100 text-amber-700' },
     adopted: { text: 'Adoptée', color: 'bg-green-100 text-green-700' },
     rejected: { text: 'Rejetée', color: 'bg-red-100 text-red-600' },
+    closed: { text: 'Clôturé', color: 'bg-teal-100 text-teal-700' },
+    archived: { text: 'Archivée', color: 'bg-slate-100 text-slate-600' },
   }
 
   return (
@@ -3638,6 +3640,8 @@ function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation
     review: { text: 'En révision', color: 'bg-amber-100 text-amber-700' },
     adopted: { text: 'Terminée', color: 'bg-green-100 text-green-700' },
     rejected: { text: 'Clôturée', color: 'bg-red-100 text-red-600' },
+    closed: { text: 'Clôturé', color: 'bg-teal-100 text-teal-700' },
+    archived: { text: 'Archivée', color: 'bg-slate-100 text-slate-600' },
   }
 
   return (
@@ -4611,6 +4615,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
     adopted: { text: 'Adoptée', color: 'bg-green-100 text-green-700' },
     rejected: { text: 'Rejetée', color: 'bg-red-100 text-red-600' },
     closed: { text: 'Clôturé', color: 'bg-teal-100 text-teal-700' },
+    archived: { text: 'Archivée', color: 'bg-slate-100 text-slate-600' },
   }
 
   return (
