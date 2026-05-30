@@ -1462,12 +1462,14 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     }
   }, [userHash])
 
-  const handleLawVoted = useCallback((lawId: string, choice: VoteChoice) => {
+  const handleLawVoted = useCallback(async (lawId: string, choice: VoteChoice) => {
+    // 1. Mise à jour Optimiste immédiate
     setLawVotedIds(prev => {
       const next = new Set([...prev, lawId])
       try { localStorage.setItem('law_voted_ids', JSON.stringify([...next])) } catch { /* ignore */ }
       return next
     })
+
     setLaws(prev =>
       prev.map(l =>
         l.id !== lawId
@@ -1475,10 +1477,62 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
           : { ...l, votes: { ...l.votes, [choice]: l.votes[choice] + 1 } }
       )
     )
+
     setVotingLaw(null)
     setAgoraLaw(null)
-    showToast('Votre avis a bien été enregistré ✓', 'info')
-  }, [])
+
+    // 2. Préparation des données pour Supabase
+    const choiceMap: Record<VoteChoice, string> = {
+      pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
+    }
+    const mappedChoice = choiceMap[choice]
+
+    try {
+      const proof = await generateVoteProof(lawId, mappedChoice)
+
+      const voteParams = {
+        p_proposal_id: String(lawId),
+        p_user_hash: userHash,
+        p_choice: mappedChoice,
+        p_proof_hash: proof,
+      }
+
+      console.log('[deposer_bulletin_loi] params:', voteParams)
+
+      // 3. Récupération du Token
+      const { data: { session } } = await supabase.auth.getSession()
+      const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+
+      // 4. Envoi sécurisé
+      const voteRes = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(voteParams),
+        }
+      )
+
+      const voteResult = await voteRes.json()
+      const error = voteRes.ok ? null : voteResult
+
+      if (error) {
+        console.log('[deposer_bulletin_loi] error:', error)
+        showToast('Réseau faible. Vote sauvegardé localement.', 'warning')
+        return
+      }
+
+      showToast('Votre avis a bien été enregistré ✓', 'info')
+
+    } catch (e) {
+      console.log('[deposer_bulletin_loi] exception:', e)
+      showToast('Erreur de connexion. Vote sauvegardé localement.', 'warning')
+    }
+  }, [userHash])
 
   const filters: { value: Stage | 'all'; label: string }[] = [
     { value: 'all', label: 'Toutes' },
