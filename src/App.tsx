@@ -1463,6 +1463,9 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   }, [userHash])
 
   const handleLawVoted = useCallback(async (lawId: string, choice: VoteChoice) => {
+    const targetLaw = laws.find(l => l.id === lawId)
+    const anId = (targetLaw as any)?.uid || (targetLaw as any)?.reference || targetLaw?.number || lawId
+
     // 1. Mise à jour Optimiste immédiate
     setLawVotedIds(prev => {
       const next = new Set([...prev, lawId])
@@ -1488,10 +1491,10 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
     const mappedChoice = choiceMap[choice]
 
     try {
-      const proof = await generateVoteProof(lawId, mappedChoice)
+      const proof = await generateVoteProof(anId, mappedChoice)
 
       const voteParams = {
-        p_proposal_id: String(lawId),
+        p_proposal_id: String(anId),
         p_user_hash: userHash,
         p_choice: mappedChoice,
         p_proof_hash: proof,
@@ -1532,7 +1535,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
       console.log('[deposer_bulletin_loi] exception:', e)
       showToast('Erreur de connexion. Vote sauvegardé localement.', 'warning')
     }
-  }, [userHash])
+  }, [userHash, laws])
 
   const filters: { value: Stage | 'all'; label: string }[] = [
     { value: 'all', label: 'Toutes' },
