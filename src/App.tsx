@@ -1444,9 +1444,9 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
 
     setLaws(prev =>
       prev.map(l =>
-        l.id !== lawId
-          ? l
-          : { ...l, votes: { ...l.votes, [choice]: l.votes[choice] + 1 } }
+        (l.id === lawId || l.number === lawId)
+          ? { ...l, votes: { ...l.votes, [choice]: l.votes[choice] + 1 } }
+          : l
       )
     )
 

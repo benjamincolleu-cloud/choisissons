@@ -56,23 +56,20 @@ const FALLBACK_LAWS: ANLaw[] = [
 
 const CACHE_KEY      = 'an_cache'
 const CACHE_TIME_KEY = 'an_cache_time'
-const CACHE_TTL_MS   = 24 * 60 * 60 * 1000
+const CACHE_TTL_MS   = 5 * 60 * 1000
 
 export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
-  // Vérifier le cache localStorage (24h)
+  // Vider le cache pour forcer un rechargement propre depuis Supabase
   try {
-    const cachedTime = localStorage.getItem(CACHE_TIME_KEY)
-    if (cachedTime && Date.now() - Number(cachedTime) < CACHE_TTL_MS) {
-      const cached = localStorage.getItem(CACHE_KEY)
-      if (cached) return JSON.parse(cached) as ANLaw[]
-    }
-  } catch { /* localStorage indisponible */ }
+    localStorage.removeItem(CACHE_KEY)
+    localStorage.removeItem(CACHE_TIME_KEY)
+  } catch { /* ignore */ }
 
   // Lire depuis la table Supabase (remplie par l'Edge Function quotidienne)
   try {
     const { data, error } = await supabase
       .from('parliamentary_laws')
-      .select('*')
+      .select('id, number, title, description, category, stage, parliament_vote_date, votes_pour, votes_contre, votes_blanc, tags, official_url, synced_at')
       .order('synced_at', { ascending: false })
 
     if (!error && data && data.length > 0) {
@@ -84,15 +81,10 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
         category:           row.category,
         stage:              row.stage as ANLaw['stage'],
         parliamentVoteDate: row.parliament_vote_date,
-        votes:              row.votes as ANLaw['votes'],
+        votes:              { pour: row.votes_pour ?? 0, contre: row.votes_contre ?? 0, blanc: row.votes_blanc ?? 0 },
         tags:               row.tags as string[],
         officialUrl:        row.official_url,
       }))
-
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(laws))
-        localStorage.setItem(CACHE_TIME_KEY, String(Date.now()))
-      } catch { /* quota dépassé */ }
 
       return laws
     }
