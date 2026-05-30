@@ -3044,13 +3044,26 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
         const [followersRes, proposalsRes, lawsRes] = await Promise.all([
           supabase.from('citizen_organisations').select('id', { count: 'exact', head: true }).eq('organisation_id', org.id),
           supabase.from('proposals').select('id,title,status,votes_pour,votes_contre,votes_blanc,created_at').eq('author', org.name),
-          supabase.from('proposals').select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof').eq('status', 'voting'),
+          supabase.from('parliamentary_laws').select('id,number,title,description,category,stage,parliament_vote_date,votes_pour,votes_contre,votes_blanc,tags,official_url').eq('stage', 'voting'),
         ])
         if (!cancelled) {
           if (followersRes.count !== null) setFollowerCount(followersRes.count)
           if (proposalsRes.data) setProposals(proposalsRes.data as OrgProposal[])
           if (lawsRes.data && lawsRes.data.length > 0) {
-            setNationalLaws((lawsRes.data as ProposalRow[]).map(mapRowToProposal))
+            setNationalLaws((lawsRes.data as any[]).map(row => ({
+              id: row.id,
+              title: row.title,
+              description: row.description,
+              category: row.category,
+              stage: row.stage as Stage,
+              votes: { pour: row.votes_pour ?? 0, contre: row.votes_contre ?? 0, blanc: row.votes_blanc ?? 0 },
+              signatures: 0,
+              targetSignatures: 10000,
+              arguments: [],
+              author: 'Assemblée Nationale',
+              date: row.parliament_vote_date,
+              tags: row.tags ?? [],
+            })))
           } else {
             setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
           }
@@ -3503,13 +3516,26 @@ function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation
       try {
         const [membersRes, lawsRes, consultRes] = await Promise.all([
           supabase.from('citizen_organisations').select('id', { count: 'exact', head: true }).eq('organisation_id', commune.id),
-          supabase.from('proposals').select('id,title,description,category,status,supports,votes_pour,votes_contre,votes_blanc,tags,created_at,blockchain_proof').eq('status', 'voting'),
+          supabase.from('parliamentary_laws').select('id,number,title,description,category,stage,parliament_vote_date,votes_pour,votes_contre,votes_blanc,tags,official_url').eq('stage', 'voting'),
           supabase.from('proposals').select('id,title,description,status,created_at,votes_pour,votes_contre,votes_blanc').eq('author', commune.name),
         ])
         if (!cancelled) {
           if (membersRes.count !== null) setMemberCount(membersRes.count)
           if (lawsRes.data && lawsRes.data.length > 0) {
-            setNationalLaws((lawsRes.data as ProposalRow[]).map(mapRowToProposal))
+            setNationalLaws((lawsRes.data as any[]).map(row => ({
+              id: row.id,
+              title: row.title,
+              description: row.description,
+              category: row.category,
+              stage: row.stage as Stage,
+              votes: { pour: row.votes_pour ?? 0, contre: row.votes_contre ?? 0, blanc: row.votes_blanc ?? 0 },
+              signatures: 0,
+              targetSignatures: 10000,
+              arguments: [],
+              author: 'Assemblée Nationale',
+              date: row.parliament_vote_date,
+              tags: row.tags ?? [],
+            })))
           } else {
             setNationalLaws(PROPOSALS.filter(p => p.stage === 'voting'))
           }
@@ -4800,7 +4826,7 @@ function LibraryPage() {
             .limit(200),
           supabase
             .from('parliamentary_laws')
-            .select('id, title, description, category, stage, votes, synced_at')
+            .select('id, title, description, category, stage, votes_pour, votes_contre, votes_blanc, synced_at')
             .in('stage', ['adopted', 'rejected', 'closed'])
             .limit(200),
         ])
@@ -4826,9 +4852,9 @@ function LibraryPage() {
           category: (l.category as string) ?? '',
           status: l.stage as string,
           type: 'law' as const,
-          votes_pour: (l.votes as { pour: number } | null)?.pour ?? 0,
-          votes_contre: (l.votes as { contre: number } | null)?.contre ?? 0,
-          votes_blanc: (l.votes as { blanc: number } | null)?.blanc ?? 0,
+          votes_pour: (l.votes_pour as number) ?? 0,
+          votes_contre: (l.votes_contre as number) ?? 0,
+          votes_blanc: (l.votes_blanc as number) ?? 0,
           date: (l.synced_at as string) ?? '',
         }))
 
