@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────
-type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed'
+type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed' | 'archived'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
 type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune' | 'commune-register' | 'assoc-register'
 
@@ -236,6 +236,7 @@ const STAGE_CONFIG: Record<Stage, { label: string; color: string; icon: ElementT
   adopted: { label: 'Adoptée', color: 'bg-green-100 text-green-700', icon: CheckCircle, description: 'Proposition adoptée' },
   rejected: { label: 'Rejetée', color: 'bg-red-100 text-red-700', icon: XCircle, description: 'Proposition rejetée' },
   closed: { label: 'Clôturé', color: 'bg-teal-100 text-teal-700', icon: Lock, description: 'Vote clôturé et ancré' },
+  archived: { label: 'Archivée', color: 'bg-slate-100 text-slate-700', icon: BookOpen, description: 'Proposition archivée' },
 }
 
 // ── Shared Components ──────────────────────────────────────────
@@ -1228,14 +1229,31 @@ function lawToProposal(law: ParliamentaryLaw): Proposal {
 // ── Law Card ───────────────────────────────────────────────────
 function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void }) {
   const total = law.votes.pour + law.votes.contre + law.votes.blanc
+
+  const voteDate = law.parliamentVoteDate ? new Date(law.parliamentVoteDate) : null
+  let daysLeft = -1
+  if (voteDate && !isNaN(voteDate.getTime())) {
+    const deadline = new Date(voteDate)
+    deadline.setDate(deadline.getDate() + 7)
+    daysLeft = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 3600 * 24))
+  }
+
+  const isClosed = law.stage === 'closed' || law.stage === 'archived'
+
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       <div className="p-4">
         {/* Badges row */}
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5">
-            Assemblée Nationale
-          </span>
+          {isClosed ? (
+            <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2.5 py-0.5 flex items-center gap-1">
+              <Lock size={12} /> Vote terminé
+            </span>
+          ) : (
+            <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5 flex items-center gap-1">
+              <Vote size={12} /> Vote ouvert {daysLeft >= 0 && `(J-${daysLeft})`}
+            </span>
+          )}
           <span className="text-xs font-semibold text-slate-400">{law.number}</span>
           <span className="ml-auto text-xs text-slate-400">{law.category}</span>
         </div>
@@ -1247,7 +1265,11 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <BookOpen size={12} className="text-slate-400" />
-            <span>Vote Parlement : <strong className="text-slate-700">{law.parliamentVoteDate}</strong></span>
+            <span>Vote Parlement : <strong className="text-slate-700">{
+              law.parliamentVoteDate && !isNaN(voteDate?.getTime() ?? NaN)
+                ? voteDate!.toLocaleDateString('fr-FR')
+                : (law.parliamentVoteDate || 'À venir')
+            }</strong></span>
           </div>
           <a
             href={law.officialUrl}
@@ -1261,23 +1283,42 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
         </div>
         <p className="text-xs text-slate-400 mb-3">Source : Assemblée Nationale officielle</p>
 
-        {/* Vote bar */}
-        {total > 0 && <VoteBar votes={law.votes} />}
-        {total > 0 && (
-          <p className="text-xs text-slate-400 mt-1">{total.toLocaleString('fr-FR')} avis citoyens</p>
+        {/* Results */}
+        {isClosed ? (
+          <div className="flex gap-4 mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <div className="flex-[0.8]">
+              <p className="text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-wider">Assemblée Nat.</p>
+              <div className="flex items-center gap-2 mt-1">
+                <Landmark size={14} className="text-slate-400" />
+                <span className="text-xs font-semibold text-slate-700">Texte voté</span>
+              </div>
+            </div>
+            <div className="w-px bg-slate-200" />
+            <div className="flex-[1.2]">
+              <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Citoyens ({total.toLocaleString('fr-FR')})</p>
+              {total > 0 ? <VoteBar votes={law.votes} /> : <p className="text-xs text-slate-400 mt-2">Aucun vote</p>}
+            </div>
+          </div>
+        ) : (
+          <>
+            {total > 0 && <VoteBar votes={law.votes} />}
+            {total > 0 && (
+              <p className="text-xs text-slate-400 mt-1">{total.toLocaleString('fr-FR')} avis citoyens</p>
+            )}
+          </>
         )}
       </div>
 
       <div className="px-4 pb-4">
         <button
           onClick={onOpen}
-          className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${law.stage === 'voting'
-            ? 'bg-[#002395] text-white shadow-md shadow-blue-200'
-            : 'bg-slate-100 text-slate-700'
+          className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${isClosed
+              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              : 'bg-[#002395] text-white shadow-md shadow-blue-200'
             }`}
         >
-          {law.stage === 'voting' ? <Vote size={15} /> : <Info size={15} />}
-          {law.stage === 'voting' ? "Lire & Voter" : "Lire le texte"}
+          {isClosed ? <Info size={15} /> : <Vote size={15} />}
+          {isClosed ? "Voir les résultats" : "Lire & Voter"}
           <ChevronRight size={14} />
         </button>
       </div>
@@ -1542,7 +1583,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
             </div>
 
             <div className="space-y-4">
-              {laws.map(law => (
+              {laws.filter(l => l.stage !== 'archived').map(law => (
                 <LawCard
                   key={law.id}
                   law={law}
@@ -4821,13 +4862,13 @@ function LibraryPage() {
           supabase
             .from('proposals')
             .select('id, title, description, category, status, votes_pour, votes_contre, votes_blanc, created_at')
-            .in('status', ['adopted', 'rejected', 'closed'])
+            .in('status', ['adopted', 'rejected', 'closed', 'archived'])
             .order('created_at', { ascending: false })
             .limit(200),
           supabase
             .from('parliamentary_laws')
             .select('id, title, description, category, stage, votes_pour, votes_contre, votes_blanc, synced_at')
-            .in('stage', ['adopted', 'rejected', 'closed'])
+            .in('stage', ['adopted', 'rejected', 'closed', 'archived'])
             .limit(200),
         ])
         if (cancelled) return
@@ -4880,7 +4921,7 @@ function LibraryPage() {
       )
     }
     if (activeCategory !== 'Toutes') result = result.filter(e => e.category === activeCategory)
-    if (statusFilter !== 'all') result = result.filter(e => e.status === statusFilter)
+    if (statusFilter !== 'all') result = result.filter(e => e.status === statusFilter || (statusFilter === 'closed' && e.status === 'archived'))
     if (sortBy === 'votes') {
       return [...result].sort(
         (a, b) => (b.votes_pour + b.votes_contre + b.votes_blanc) - (a.votes_pour + a.votes_contre + a.votes_blanc)

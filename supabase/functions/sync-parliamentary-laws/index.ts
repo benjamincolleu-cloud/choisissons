@@ -81,12 +81,22 @@ function mapDocument(d: unknown, index: number): LawRow | null {
     (r.urlAn ?? r.url ?? r.cheminUrl ??
       `https://www.assemblee-nationale.fr/dyn/17/dossiers/${uid}`) as string
 
+  let calculatedStage = 'voting'
+  if (voteDate) {
+    const vd = new Date(voteDate)
+    if (!isNaN(vd.getTime())) {
+      const diffDays = (Date.now() - vd.getTime()) / (1000 * 3600 * 24)
+      if (diffDays > 37) calculatedStage = 'archived'
+      else if (diffDays > 7) calculatedStage = 'closed'
+    }
+  }
+
   return {
     number:               uid,
     title,
     description,
     category:             mapCategory([...themes, title]),
-    stage:                'voting',
+    stage:                calculatedStage,
     parliament_vote_date: voteDate || null,
     votes:                { pour: 0, contre: 0, blanc: 0 },
     official_url:         officialUrl,
@@ -159,6 +169,16 @@ Deno.serve(async (req) => {
         errors += batch.length
       }
     }
+  }
+
+  // 4. Update stages for older laws still in DB
+  try {
+    const { error: rpcError } = await supabase.rpc('update_parliamentary_law_stages')
+    if (rpcError) {
+      console.error('[sync-parliamentary-laws] RPC update stages error:', rpcError.message)
+    }
+  } catch (e) {
+    console.error('[sync-parliamentary-laws] RPC Exception:', e)
   }
 
   const result = { synced, errors, timestamp: new Date().toISOString() }
