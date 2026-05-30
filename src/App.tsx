@@ -194,31 +194,31 @@ async function flushPendingVotes() {
   const pending = loadPendingVotes()
   if (pending.length === 0) return
   const { data: { session } } = await supabase.auth.getSession()
-  const flushAuthToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+  const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
   const remaining: PendingVote[] = []
   for (const v of pending) {
     try {
       const proof = await generateVoteProof(v.proposalId, v.choice)
       const flushParams = {
-        p_proposal_id: parseInt(String(v.proposalId), 10),
-        p_user_hash:   v.userHash,
-        p_choice:      v.choice,
-        p_proof_hash:  proof,
+        p_proposal_id: String(v.proposalId),
+        p_user_hash: v.userHash,
+        p_choice: v.choice,
+        p_proof_hash: proof,
       }
       console.log('[deposer_bulletin] flush params:', flushParams)
-      const flushRes  = await fetch(
+      const flushRes = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${flushAuthToken}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${authToken}`,
           },
           body: JSON.stringify(flushParams),
         }
       )
-      const data  = await flushRes.json()
+      const data = await flushRes.json()
       const error = flushRes.ok ? null : data
       if (error) console.log('[deposer_bulletin] flush error:', error)
       // already_voted ou succès → ne pas réessayer
@@ -239,18 +239,18 @@ const ADMIN_EMAILS: string[] = ['benjamin@choisissons.fr', 'benjamin.colleu@gmai
 
 const VOTE_CHOICE_LABEL: Record<VoteChoice, string> = { pour: 'Pour', contre: 'Contre', blanc: 'Blanc' }
 const VOTE_CHOICE_BADGE: Record<VoteChoice, string> = {
-  pour:   'bg-green-100 text-green-700',
+  pour: 'bg-green-100 text-green-700',
   contre: 'bg-red-100 text-red-600',
-  blanc:  'bg-slate-100 text-slate-600',
+  blanc: 'bg-slate-100 text-slate-600',
 }
 
 const STAGE_CONFIG: Record<Stage, { label: string; color: string; icon: ElementType; description: string }> = {
   seedling: { label: 'Pépinière', color: 'bg-emerald-100 text-emerald-700', icon: Sprout, description: 'En cours de signatures' },
-  review:   { label: 'Jury citoyen', color: 'bg-amber-100 text-amber-700', icon: Users, description: 'Examinée par le jury' },
-  voting:   { label: 'Vote ouvert', color: 'bg-indigo-100 text-indigo-700', icon: Vote, description: 'Votez maintenant' },
-  adopted:  { label: 'Adoptée', color: 'bg-green-100 text-green-700', icon: CheckCircle, description: 'Proposition adoptée' },
+  review: { label: 'Jury citoyen', color: 'bg-amber-100 text-amber-700', icon: Users, description: 'Examinée par le jury' },
+  voting: { label: 'Vote ouvert', color: 'bg-indigo-100 text-indigo-700', icon: Vote, description: 'Votez maintenant' },
+  adopted: { label: 'Adoptée', color: 'bg-green-100 text-green-700', icon: CheckCircle, description: 'Proposition adoptée' },
   rejected: { label: 'Rejetée', color: 'bg-red-100 text-red-700', icon: XCircle, description: 'Proposition rejetée' },
-  closed:   { label: 'Clôturé', color: 'bg-teal-100 text-teal-700', icon: Lock, description: 'Vote clôturé et ancré' },
+  closed: { label: 'Clôturé', color: 'bg-teal-100 text-teal-700', icon: Lock, description: 'Vote clôturé et ancré' },
 }
 
 // ── Shared Components ──────────────────────────────────────────
@@ -267,14 +267,14 @@ function StageBadge({ stage }: { stage: Stage }) {
 function VoteBar({ votes }: { votes: { pour: number; contre: number; blanc: number } }) {
   const total = votes.pour + votes.contre + votes.blanc
   if (total === 0) return null
-  const pourPct  = Math.round((votes.pour / total) * 100)
+  const pourPct = Math.round((votes.pour / total) * 100)
   const contrePct = Math.round((votes.contre / total) * 100)
-  const blancPct  = 100 - pourPct - contrePct
+  const blancPct = 100 - pourPct - contrePct
   return (
     <div className="mt-2">
       <div className="flex h-2 rounded-full overflow-hidden">
         <div className="bg-green-500 transition-all" style={{ width: `${pourPct}%` }} />
-        <div className="bg-red-400 transition-all"   style={{ width: `${contrePct}%` }} />
+        <div className="bg-red-400 transition-all" style={{ width: `${contrePct}%` }} />
         <div className="bg-slate-300 transition-all" style={{ width: `${blancPct}%` }} />
       </div>
       <div className="flex justify-between text-xs text-slate-500 mt-1">
@@ -294,9 +294,9 @@ function ToastItem({ entry, onDone }: { entry: ToastEntry; onDone: (id: number) 
   }, [entry.id, onDone])
   const base = 'flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg pointer-events-auto'
   const colors =
-    entry.type === 'error'   ? 'bg-red-600 text-white' :
-    entry.type === 'warning' ? 'bg-orange-500 text-white' :
-                               'bg-slate-800 text-white'
+    entry.type === 'error' ? 'bg-red-600 text-white' :
+      entry.type === 'warning' ? 'bg-orange-500 text-white' :
+        'bg-slate-800 text-white'
   const Icon = entry.type === 'error' ? XCircle : entry.type === 'warning' ? XCircle : CheckCircle
   return (
     <div className={`${base} ${colors}`}>
@@ -355,9 +355,9 @@ function AboutModal({ onClose }: { onClose: () => void }) {
           </p>
           <div className="space-y-3 mb-6">
             {[
-              { icon: BookOpen, label: 'Transparence',   desc: 'Toutes les décisions et les votes agrégés sont publics.' },
-              { icon: Lock,     label: 'Anonymat',       desc: 'Votre vote individuel est chiffré et ne peut être tracé.' },
-              { icon: Shield,   label: 'Souveraineté',   desc: 'Aucun acteur privé ni politique ne contrôle la plateforme.' },
+              { icon: BookOpen, label: 'Transparence', desc: 'Toutes les décisions et les votes agrégés sont publics.' },
+              { icon: Lock, label: 'Anonymat', desc: 'Votre vote individuel est chiffré et ne peut être tracé.' },
+              { icon: Shield, label: 'Souveraineté', desc: 'Aucun acteur privé ni politique ne contrôle la plateforme.' },
             ].map(({ icon: Icon, label, desc }) => (
               <div key={label} className="flex gap-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -395,16 +395,16 @@ function isAtLeast18(dateStr: string): boolean {
 }
 
 function LoginScreen() {
-  const [email, setEmail]             = useState('')
-  const [codePostal, setCodePostal]   = useState('')
+  const [email, setEmail] = useState('')
+  const [codePostal, setCodePostal] = useState('')
   const [dateNaissance, setDateNaissance] = useState('')
-  const [certifie, setCertifie]       = useState(false)
-  const [sending, setSending]         = useState(false)
-  const [sent, setSent]               = useState(false)
-  const [otp, setOtp]                 = useState('')
-  const [verifying, setVerifying]     = useState(false)
-  const [activeStep, setActiveStep]   = useState<number | null>(null)
-  const [showAbout, setShowAbout]     = useState(false)
+  const [certifie, setCertifie] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [otp, setOtp] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [activeStep, setActiveStep] = useState<number | null>(null)
+  const [showAbout, setShowAbout] = useState(false)
 
   const formValid = email.trim() && /^\d{5}$/.test(codePostal) && dateNaissance && certifie
 
@@ -480,7 +480,7 @@ function LoginScreen() {
         <div className="space-y-3 mb-8">
           {[
             { icon: Shield, text: 'Vote anonyme et vérifié cryptographiquement' },
-            { icon: Users,  text: 'Jury citoyen indépendant' },
+            { icon: Users, text: 'Jury citoyen indépendant' },
             { icon: Sprout, text: 'Propositions du peuple, pour le peuple' },
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="flex items-center gap-3 text-indigo-200 text-sm">
@@ -615,9 +615,8 @@ function LoginScreen() {
                   onClick={() => setActiveStep(activeStep === i ? null : i)}
                   className="text-center group"
                 >
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto mb-1 transition-colors ${
-                    activeStep === i ? 'bg-white text-indigo-700' : 'bg-indigo-600 text-white group-hover:bg-indigo-400'
-                  }`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto mb-1 transition-colors ${activeStep === i ? 'bg-white text-indigo-700' : 'bg-indigo-600 text-white group-hover:bg-indigo-400'
+                    }`}>
                     {i + 1}
                   </div>
                   <span className={activeStep === i ? 'text-white font-semibold' : ''}>{step.label}</span>
@@ -654,7 +653,7 @@ function AgoraModal({ proposal, onVote, onClose, hasVoted }: {
   onClose: () => void
   hasVoted?: boolean
 }) {
-  const pourArgs  = proposal.arguments.filter(a => a.type === 'pour')
+  const pourArgs = proposal.arguments.filter(a => a.type === 'pour')
   const contreArgs = proposal.arguments.filter(a => a.type === 'contre')
 
   return (
@@ -754,11 +753,11 @@ function VotingBooth({ proposal, onVoted, onClose }: {
   onVoted: (choice: VoteChoice, hash: string) => void
   onClose: () => void
 }) {
-  const [selected, setSelected]   = useState<VoteChoice | null>(null)
+  const [selected, setSelected] = useState<VoteChoice | null>(null)
   const [confirming, setConfirming] = useState(false)
-  const [voted, setVoted]         = useState(false)
-  const [hash, setHash]           = useState('')
-  const [loading, setLoading]     = useState(false)
+  const [voted, setVoted] = useState(false)
+  const [hash, setHash] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleConfirm = async () => {
     if (!selected) return
@@ -778,10 +777,10 @@ function VotingBooth({ proposal, onVoted, onClose }: {
     selectedBg: string
     selectedBorder: string
   }[] = [
-    { choice: 'pour',   label: 'Pour',   icon: <ThumbsUp size={28} />,   selectedColor: 'text-green-600', selectedBg: 'bg-green-50',  selectedBorder: 'border-green-400' },
-    { choice: 'contre', label: 'Contre', icon: <ThumbsDown size={28} />, selectedColor: 'text-red-500',   selectedBg: 'bg-red-50',    selectedBorder: 'border-red-400' },
-    { choice: 'blanc',  label: 'Blanc',  icon: <Minus size={28} />,      selectedColor: 'text-slate-500', selectedBg: 'bg-slate-50',  selectedBorder: 'border-slate-400' },
-  ]
+      { choice: 'pour', label: 'Pour', icon: <ThumbsUp size={28} />, selectedColor: 'text-green-600', selectedBg: 'bg-green-50', selectedBorder: 'border-green-400' },
+      { choice: 'contre', label: 'Contre', icon: <ThumbsDown size={28} />, selectedColor: 'text-red-500', selectedBg: 'bg-red-50', selectedBorder: 'border-red-400' },
+      { choice: 'blanc', label: 'Blanc', icon: <Minus size={28} />, selectedColor: 'text-slate-500', selectedBg: 'bg-slate-50', selectedBorder: 'border-slate-400' },
+    ]
 
   if (voted) {
     return (
@@ -830,11 +829,10 @@ function VotingBooth({ proposal, onVoted, onClose }: {
               <button
                 key={choice}
                 onClick={() => setSelected(choice)}
-                className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all active:scale-95 ${
-                  active
-                    ? `${selectedBg} ${selectedBorder} ${selectedColor}`
-                    : 'bg-white border-slate-200 text-slate-400'
-                }`}
+                className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all active:scale-95 ${active
+                  ? `${selectedBg} ${selectedBorder} ${selectedColor}`
+                  : 'bg-white border-slate-200 text-slate-400'
+                  }`}
               >
                 <span className={active ? selectedColor : 'text-slate-300'}>{icon}</span>
                 <span className={`text-lg font-bold ${active ? selectedColor : 'text-slate-500'}`}>{label}</span>
@@ -863,8 +861,8 @@ function VotingBooth({ proposal, onVoted, onClose }: {
             <p className="text-slate-500 text-sm mb-1">
               Vous votez{' '}
               <strong className={
-                selected === 'pour'   ? 'text-green-600' :
-                selected === 'contre' ? 'text-red-500'   : 'text-slate-500'
+                selected === 'pour' ? 'text-green-600' :
+                  selected === 'contre' ? 'text-red-500' : 'text-slate-500'
               }>
                 {selected?.toUpperCase()}
               </strong>{' '}
@@ -916,9 +914,9 @@ function ResultsModal({ proposalId, onClose }: { proposalId: string; onClose: ()
         if (error) throw error
         if (!cancelled && data) {
           setVotes({
-            pour:   (data as { votes_pour: number }).votes_pour     ?? 0,
+            pour: (data as { votes_pour: number }).votes_pour ?? 0,
             contre: (data as { votes_contre: number }).votes_contre ?? 0,
-            blanc:  (data as { votes_blanc: number }).votes_blanc   ?? 0,
+            blanc: (data as { votes_blanc: number }).votes_blanc ?? 0,
           })
         }
       } catch { /* keep zeros */ }
@@ -933,15 +931,15 @@ function ResultsModal({ proposalId, onClose }: { proposalId: string; onClose: ()
     return () => { cancelled = true }
   }, [proposalId])
 
-  const total     = votes.pour + votes.contre + votes.blanc
-  const pourPct   = total > 0 ? Math.round((votes.pour   / total) * 100) : 0
+  const total = votes.pour + votes.contre + votes.blanc
+  const pourPct = total > 0 ? Math.round((votes.pour / total) * 100) : 0
   const contrePct = total > 0 ? Math.round((votes.contre / total) * 100) : 0
-  const blancPct  = 100 - pourPct - contrePct
+  const blancPct = 100 - pourPct - contrePct
 
   const bars = [
-    { label: 'Pour',        pct: pourPct,   color: 'bg-green-500', textColor: 'text-green-600', count: votes.pour   },
-    { label: 'Contre',      pct: contrePct, color: 'bg-red-400',   textColor: 'text-red-500',   count: votes.contre },
-    { label: 'Vote blanc',  pct: blancPct,  color: 'bg-slate-300', textColor: 'text-slate-500', count: votes.blanc  },
+    { label: 'Pour', pct: pourPct, color: 'bg-green-500', textColor: 'text-green-600', count: votes.pour },
+    { label: 'Contre', pct: contrePct, color: 'bg-red-400', textColor: 'text-red-500', count: votes.contre },
+    { label: 'Vote blanc', pct: blancPct, color: 'bg-slate-300', textColor: 'text-slate-500', count: votes.blanc },
   ]
 
   return (
@@ -1031,7 +1029,7 @@ function ProposalCard({ proposal, onOpen, currentVote, onRevote, hasAlreadyVoted
   onRevote?: () => void
   hasAlreadyVoted?: boolean
 }) {
-  const total    = proposal.votes.pour + proposal.votes.contre + proposal.votes.blanc
+  const total = proposal.votes.pour + proposal.votes.contre + proposal.votes.blanc
   const progress = Math.min((proposal.signatures / proposal.targetSignatures) * 100, 100)
 
   // Stable pseudo-random juror count derived from proposal id (20–80)
@@ -1157,11 +1155,10 @@ function ProposalCard({ proposal, onOpen, currentVote, onRevote, hasAlreadyVoted
         ) : (
           <button
             onClick={onOpen}
-            className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${
-              proposal.stage === 'voting'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                : 'bg-slate-100 text-slate-700'
-            }`}
+            className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${proposal.stage === 'voting'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+              : 'bg-slate-100 text-slate-700'
+              }`}
           >
             {proposal.stage === 'voting' ? <Vote size={15} /> : <Info size={15} />}
             {proposal.stage === 'voting' ? "S'informer & Voter" : "S'informer"}
@@ -1289,11 +1286,10 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
       <div className="px-4 pb-4">
         <button
           onClick={onOpen}
-          className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${
-            law.stage === 'voting'
-              ? 'bg-[#002395] text-white shadow-md shadow-blue-200'
-              : 'bg-slate-100 text-slate-700'
-          }`}
+          className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${law.stage === 'voting'
+            ? 'bg-[#002395] text-white shadow-md shadow-blue-200'
+            : 'bg-slate-100 text-slate-700'
+            }`}
         >
           {law.stage === 'voting' ? <Vote size={15} /> : <Info size={15} />}
           {law.stage === 'voting' ? "Lire & Voter" : "Lire le texte"}
@@ -1312,26 +1308,26 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   )
 
   // ── Propositions citoyennes state ──────────────────────────────
-  const [proposals, setProposals]           = useState<Proposal[]>(PROPOSALS)
-  const [loading, setLoading]               = useState(true)
-  const [activeStage, setActiveStage]       = useState<Stage | 'all'>('all')
+  const [proposals, setProposals] = useState<Proposal[]>(PROPOSALS)
+  const [loading, setLoading] = useState(true)
+  const [activeStage, setActiveStage] = useState<Stage | 'all'>('all')
   const [activeCategory, setActiveCategory] = useState<string | null>(initialCategory ?? null)
-  const [agoraProposal, setAgoraProposal]   = useState<Proposal | null>(null)
+  const [agoraProposal, setAgoraProposal] = useState<Proposal | null>(null)
   const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
-  const [votedChoices, setVotedChoices]     = useState<Record<string, VoteChoice>>({})
+  const [votedChoices, setVotedChoices] = useState<Record<string, VoteChoice>>({})
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
 
   // ── Lois en cours state ────────────────────────────────────────
-  const [laws, setLaws]             = useState<ParliamentaryLaw[]>(PARLIAMENTARY_LAWS_INITIAL)
+  const [laws, setLaws] = useState<ParliamentaryLaw[]>(PARLIAMENTARY_LAWS_INITIAL)
   const [lawVotedIds, setLawVotedIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('law_voted_ids')
       return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
     } catch { return new Set() }
   })
-  const [agoraLaw, setAgoraLaw]     = useState<Proposal | null>(null)
-  const [votingLaw, setVotingLaw]   = useState<Proposal | null>(null)
-  const [votedIds, setVotedIds]     = useState<Set<string>>(new Set())
+  const [agoraLaw, setAgoraLaw] = useState<Proposal | null>(null)
+  const [votingLaw, setVotingLaw] = useState<Proposal | null>(null)
+  const [votedIds, setVotedIds] = useState<Set<string>>(new Set())
 
   // Fetch lois from Assemblée Nationale API, fall back to hardcoded data silently
   useEffect(() => {
@@ -1383,11 +1379,11 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
 
   const filtered = useMemo(() =>
     proposals.filter(p => {
-      const stageOk    = activeStage === 'all' || p.stage === activeStage
+      const stageOk = activeStage === 'all' || p.stage === activeStage
       const categoryOk = !activeCategory || p.category === activeCategory
       return stageOk && categoryOk
     }),
-  [proposals, activeStage, activeCategory])
+    [proposals, activeStage, activeCategory])
 
   const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) => {
     const isRevote = oldChoice !== undefined
@@ -1398,22 +1394,6 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
       pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
     }
     const mappedChoice = choiceMap[choice]
-    const numericId    = parseInt(String(proposalId), 10)
-
-    // Loi AN (ID non numérique) → vote local uniquement, pas de DB
-    if (isNaN(numericId)) {
-      setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
-      setProposals(prev =>
-        prev.map(p => {
-          if (p.id !== proposalId) return p
-          const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
-          if (isRevote && oldChoice) newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
-          return { ...p, votes: newVotes }
-        })
-      )
-      showToast('Votre avis sur cette loi a été enregistré ✓', 'info')
-      return
-    }
 
     // Optimistic UI update — applies immediately so the user gets instant feedback
     // even if the network is slow or offline.
@@ -1429,47 +1409,56 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
 
     const proof = await generateVoteProof(proposalId, mappedChoice)
     const voteParams = {
-      p_proposal_id: numericId,
-      p_user_hash:   userHash,
-      p_choice:      mappedChoice,
-      p_proof_hash:  proof,
+      p_proposal_id: String(proposalId),
+      p_user_hash: userHash,
+      p_choice: mappedChoice,
+      p_proof_hash: proof,
     }
     console.log('[deposer_bulletin] params:', voteParams)
 
     const { data: { session } } = await supabase.auth.getSession()
     const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
 
-    const voteRes  = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(voteParams),
-      }
-    )
-    const voteResult = await voteRes.json()
-    const error      = voteRes.ok ? null : voteResult
-    if (error) console.log('[deposer_bulletin] error:', error)
+    try {
+      const voteRes = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(voteParams),
+        }
+      )
+      const voteResult = await voteRes.json()
+      const error = voteRes.ok ? null : voteResult
+      if (error) console.log('[deposer_bulletin] error:', error)
 
-    if (error) {
-      // DB failed — queue for later sync. UI stays updated (optimistic).
+      if (error) {
+        // DB failed — queue for later sync. UI stays updated (optimistic).
+        const pending = loadPendingVotes()
+        if (!pending.some(v => v.proposalId === proposalId)) {
+          savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
+        }
+        showToast('Réseau faible. Vote sauvegardé et synchronisé à la prochaine connexion.', 'warning')
+        return
+      }
+
+      // DB confirmed — show bonus feedback
+      if (isRevote) {
+        showToast('Vote mis à jour ✓', 'info')
+      } else {
+        setResultsProposalId(proposalId)
+      }
+    } catch (e) {
+      console.log('[deposer_bulletin] exception:', e)
       const pending = loadPendingVotes()
       if (!pending.some(v => v.proposalId === proposalId)) {
         savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
       }
       showToast('Réseau faible. Vote sauvegardé et synchronisé à la prochaine connexion.', 'warning')
-      return
-    }
-
-    // DB confirmed — show bonus feedback
-    if (isRevote) {
-      showToast('Vote mis à jour ✓', 'info')
-    } else {
-      setResultsProposalId(proposalId)
     }
   }, [userHash])
 
@@ -1492,11 +1481,11 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   }, [])
 
   const filters: { value: Stage | 'all'; label: string }[] = [
-    { value: 'all',      label: 'Toutes' },
+    { value: 'all', label: 'Toutes' },
     { value: 'seedling', label: 'Pépinière' },
-    { value: 'review',   label: 'Jury' },
-    { value: 'voting',   label: 'Vote' },
-    { value: 'adopted',  label: 'Adoptées' },
+    { value: 'review', label: 'Jury' },
+    { value: 'voting', label: 'Vote' },
+    { value: 'adopted', label: 'Adoptées' },
   ]
 
   return (
@@ -1512,21 +1501,19 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
         <div className="flex gap-2 mb-5">
           <button
             onClick={() => setActiveTab('lois')}
-            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${
-              activeTab === 'lois'
-                ? 'bg-[#002395] text-white shadow-lg shadow-blue-200'
-                : 'bg-slate-100 text-slate-500'
-            }`}
+            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${activeTab === 'lois'
+              ? 'bg-[#002395] text-white shadow-lg shadow-blue-200'
+              : 'bg-slate-100 text-slate-500'
+              }`}
           >
             🏛 Lois en cours
           </button>
           <button
             onClick={() => setActiveTab('propositions')}
-            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${
-              activeTab === 'propositions'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                : 'bg-slate-100 text-slate-500'
-            }`}
+            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${activeTab === 'propositions'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+              : 'bg-slate-100 text-slate-500'
+              }`}
           >
             ✊ Propositions citoyennes
           </button>
@@ -1565,8 +1552,8 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
             <div className="bg-indigo-600 rounded-2xl p-4 mb-5 text-white">
               <div className="flex justify-around">
                 {[
-                  { value: proposals.length,                                    label: 'propositions' },
-                  { value: proposals.filter(p => p.stage === 'voting').length,  label: 'en vote' },
+                  { value: proposals.length, label: 'propositions' },
+                  { value: proposals.filter(p => p.stage === 'voting').length, label: 'en vote' },
                   { value: proposals.filter(p => p.stage === 'adopted').length, label: 'adoptées' },
                 ].map(({ value, label }) => (
                   <div key={label} className="text-center">
@@ -1596,11 +1583,10 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
                 <button
                   key={f.value}
                   onClick={() => setActiveStage(f.value)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                    activeStage === f.value
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${activeStage === f.value
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                    }`}
                 >
                   {f.label}
                 </button>
@@ -1697,18 +1683,18 @@ interface Organisation {
   abonnement?: boolean
 }
 
-type CommuneRole   = 'member' | 'admin' | 'elu' | 'agent_com' | 'lecteur_admin'
+type CommuneRole = 'member' | 'admin' | 'elu' | 'agent_com' | 'lecteur_admin'
 type CommuneAction = 'create_consultation' | 'publish_news' | 'publish_agenda' | 'publish_editorial' | 'upload_bulletin' | 'manage_members' | 'view_stats'
 
 function canDo(role: CommuneRole, action: CommuneAction): boolean {
   const matrix: Record<CommuneAction, CommuneRole[]> = {
     create_consultation: ['admin', 'elu'],
-    publish_news:        ['admin', 'elu', 'agent_com'],
-    publish_agenda:      ['admin', 'elu', 'agent_com'],
-    publish_editorial:   ['admin', 'elu'],
-    upload_bulletin:     ['admin', 'agent_com'],
-    manage_members:      ['admin'],
-    view_stats:          ['admin', 'elu', 'agent_com', 'lecteur_admin'],
+    publish_news: ['admin', 'elu', 'agent_com'],
+    publish_agenda: ['admin', 'elu', 'agent_com'],
+    publish_editorial: ['admin', 'elu'],
+    upload_bulletin: ['admin', 'agent_com'],
+    manage_members: ['admin'],
+    view_stats: ['admin', 'elu', 'agent_com', 'lecteur_admin'],
   }
   return matrix[action]?.includes(role) ?? false
 }
@@ -1757,19 +1743,19 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
   const [exploreTab, setExploreTab] = useState<'discover' | 'organisations'>('discover')
 
   // Discover tab state
-  const [query, setQuery]               = useState('')
+  const [query, setQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [activeStatus, setActiveStatus] = useState<Stage | null>('voting')
-  const [sortBy, setSortBy]             = useState<'recent' | 'popular'>('recent')
-  const [loadingData, setLoadingData]   = useState(true)
+  const [sortBy, setSortBy] = useState<'recent' | 'popular'>('recent')
+  const [loadingData, setLoadingData] = useState(true)
   const [allProposals, setAllProposals] = useState<Proposal[]>(PROPOSALS)
 
   // Voting flow state
-  const [agoraProposal, setAgoraProposal]   = useState<Proposal | null>(null)
+  const [agoraProposal, setAgoraProposal] = useState<Proposal | null>(null)
   const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
-  const [votedChoices, setVotedChoices]     = useState<Record<string, VoteChoice>>({})
+  const [votedChoices, setVotedChoices] = useState<Record<string, VoteChoice>>({})
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
-  const [votedIds, setVotedIds]             = useState<Set<string>>(new Set())
+  const [votedIds, setVotedIds] = useState<Set<string>>(new Set())
 
   // Organisations tab state
   const [orgSubTab, setOrgSubTab] = useState<'commune' | 'ong' | 'media'>('commune')
@@ -1861,25 +1847,72 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
   }
 
   async function handleVoted(proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) {
+    const isRevote = oldChoice !== undefined
+    setVotingProposal(null)
+    setAgoraProposal(null)
+
+    const choiceMap: Record<VoteChoice, string> = {
+      pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
+    }
+    const mappedChoice = choiceMap[choice]
+
     setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
     setAllProposals(prev => prev.map(p => {
       if (p.id !== proposalId) return p
-      const v = { ...p.votes }
-      if (oldChoice) v[oldChoice === 'pour' ? 'pour' : oldChoice === 'contre' ? 'contre' : 'blanc'] -= 1
-      v[choice === 'pour' ? 'pour' : choice === 'contre' ? 'contre' : 'blanc'] += 1
-      return { ...p, votes: v }
+      const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
+      if (oldChoice) newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
+      return { ...p, votes: newVotes }
     }))
-    setVotingProposal(null)
-    setAgoraProposal(null)
-    setResultsProposalId(proposalId)
+
+    const proof = await generateVoteProof(proposalId, mappedChoice)
+    const voteParams = {
+      p_proposal_id: String(proposalId),
+      p_user_hash: userHash,
+      p_choice: mappedChoice,
+      p_proof_hash: proof,
+    }
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+
+    try {
+      const voteRes = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(voteParams),
+        }
+      )
+      const voteResult = await voteRes.json()
+      const error = voteRes.ok ? null : voteResult
+
+      if (error) throw new Error('DB Error')
+
+      if (isRevote) {
+        showToast('Vote mis à jour ✓', 'info')
+      } else {
+        setResultsProposalId(proposalId)
+      }
+    } catch (e) {
+      const pending = loadPendingVotes()
+      if (!pending.some(v => v.proposalId === proposalId)) {
+        savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
+      }
+      showToast('Réseau faible. Vote sauvegardé et synchronisé à la prochaine connexion.', 'warning')
+    }
   }
 
   const EXPLORE_CATEGORIES = ['Toutes', 'Économie', 'Social', 'Numérique', 'Institutions', 'Environnement', 'Justice']
 
   const STATUS_TABS: { key: Stage; label: string }[] = [
-    { key: 'voting',   label: 'En vote'    },
-    { key: 'review',   label: 'En examen'  },
-    { key: 'adopted',  label: 'Adoptées'   },
+    { key: 'voting', label: 'En vote' },
+    { key: 'review', label: 'En examen' },
+    { key: 'adopted', label: 'Adoptées' },
   ]
 
   const filteredProposals = useMemo(() => {
@@ -1926,9 +1959,8 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
           <button
             key={tab}
             onClick={() => setExploreTab(tab)}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-              exploreTab === tab ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
-            }`}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${exploreTab === tab ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
+              }`}
           >
             {tab === 'discover' ? 'Propositions' : 'Organisations'}
           </button>
@@ -1965,11 +1997,10 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat === 'Toutes' ? null : cat)}
-                  className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-100 text-slate-600 active:scale-95'
-                  }`}
+                  className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${isActive
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 text-slate-600 active:scale-95'
+                    }`}
                 >
                   {cat}
                 </button>
@@ -1984,11 +2015,10 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
                 <button
                   key={key}
                   onClick={() => setActiveStatus(activeStatus === key ? null : key)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    activeStatus === key
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-slate-100 text-slate-500 active:scale-95'
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${activeStatus === key
+                    ? 'bg-slate-800 text-white'
+                    : 'bg-slate-100 text-slate-500 active:scale-95'
+                    }`}
                 >
                   {label}
                 </button>
@@ -2099,11 +2129,10 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
               <button
                 key={sub}
                 onClick={() => setOrgSubTab(sub)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  orgSubTab === sub
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600'
-                }`}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${orgSubTab === sub
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 text-slate-600'
+                  }`}
               >
                 {orgSubTabLabel[sub]}
               </button>
@@ -2142,11 +2171,10 @@ function ExplorePage({ onSelectCategory: _onSelectCategory, userHash, onNavigate
                     <button
                       onClick={() => !isFollowed && handleFollowOrg(org.id)}
                       disabled={isFollowed}
-                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                        isFollowed
-                          ? 'bg-emerald-50 text-emerald-600'
-                          : 'bg-indigo-600 text-white active:scale-95'
-                      }`}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isFollowed
+                        ? 'bg-emerald-50 text-emerald-600'
+                        : 'bg-indigo-600 text-white active:scale-95'
+                        }`}
                     >
                       {isFollowed ? '✓ Suivi' : 'Suivre'}
                     </button>
@@ -2202,24 +2230,24 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
   userHash: string
   userEmail: string
 }) {
-  const [showSettings, setShowSettings]   = useState(false)
-  const [showLegal, setShowLegal]         = useState<string | null>(null)
-  const [notifEnabled, setNotifEnabled]   = useState(true)
-  const [language, setLanguage]           = useState('FR')
+  const [showSettings, setShowSettings] = useState(false)
+  const [showLegal, setShowLegal] = useState<string | null>(null)
+  const [notifEnabled, setNotifEnabled] = useState(true)
+  const [language, setLanguage] = useState('FR')
   const [userPlan, setUserPlan] = useState<'citoyen' | 'commune' | 'ong' | 'media'>('citoyen')
-  const [subscriptionPlan, setSubscriptionPlan]     = useState<string>('gratuit')
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string>('gratuit')
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('inactive')
-  const [showSuccessBanner, setShowSuccessBanner]   = useState(false)
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false)
 
-  const [votedProposals, setVotedProposals]   = useState<VoteRecord[]>([])
-  const [loadingVotes, setLoadingVotes]       = useState(true)
-  const [myProposals, setMyProposals]         = useState<MyProposalRecord[]>([])
-  const [loadingMyProps, setLoadingMyProps]   = useState(true)
+  const [votedProposals, setVotedProposals] = useState<VoteRecord[]>([])
+  const [loadingVotes, setLoadingVotes] = useState(true)
+  const [myProposals, setMyProposals] = useState<MyProposalRecord[]>([])
+  const [loadingMyProps, setLoadingMyProps] = useState(true)
 
-  const [fullName, setFullName]             = useState<string>('')
+  const [fullName, setFullName] = useState<string>('')
   const [profileCommune, setProfileCommune] = useState<string | null>(null)
 
-  const displayName  = fullName || emailToDisplayName(userEmail)
+  const displayName = fullName || emailToDisplayName(userEmail)
   const userInitials = nameToInitials(displayName)
 
   useEffect(() => {
@@ -2240,20 +2268,20 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         .single()
         .then(({ data }) => {
           if (data?.commune_name) setProfileCommune(data.commune_name as string)
-          if (data?.subscription_plan)  setSubscriptionPlan(data.subscription_plan as string)
+          if (data?.subscription_plan) setSubscriptionPlan(data.subscription_plan as string)
           if (data?.subscription_status) setSubscriptionStatus(data.subscription_status as string)
         })
     })
   }, [])
 
   // "Ma commune" state
-  const [communeQuery, setCommuneQuery]         = useState('')
-  const [communeResults, setCommuneResults]     = useState<Organisation[]>([])
-  const [loadingCommune, setLoadingCommune]     = useState(false)
+  const [communeQuery, setCommuneQuery] = useState('')
+  const [communeResults, setCommuneResults] = useState<Organisation[]>([])
+  const [loadingCommune, setLoadingCommune] = useState(false)
   const [joinedCommuneIds, setJoinedCommuneIds] = useState<Set<string>>(new Set())
-  const [joinedCommunes, setJoinedCommunes]     = useState<Organisation[]>([])
-  const [joinedOrgs, setJoinedOrgs]             = useState<Organisation[]>([])
-  const [communeRoles, setCommuneRoles]         = useState<Record<string, CommuneRole>>({})
+  const [joinedCommunes, setJoinedCommunes] = useState<Organisation[]>([])
+  const [joinedOrgs, setJoinedOrgs] = useState<Organisation[]>([])
+  const [communeRoles, setCommuneRoles] = useState<Record<string, CommuneRole>>({})
 
 
 
@@ -2338,7 +2366,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
           const roleMap: Record<string, CommuneRole> = {}
           for (const r of rows) {
             const v = r.role as string
-            roleMap[r.organisation_id] = (['admin','elu','agent_com','lecteur_admin'] as CommuneRole[]).includes(v as CommuneRole)
+            roleMap[r.organisation_id] = (['admin', 'elu', 'agent_com', 'lecteur_admin'] as CommuneRole[]).includes(v as CommuneRole)
               ? (v as CommuneRole)
               : 'member'
           }
@@ -2484,7 +2512,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         <div className="space-y-4 text-sm text-slate-600 leading-relaxed">
           <div>
             <p className="font-semibold text-slate-700 mb-1">Éditeur de la plateforme</p>
-            <p>Benjamin Colleu<br/>Micro-entrepreneur — SIRET : 445 241 649 00059<br/>Adresse : Dordogne (24), France<br/>Contact : contact@choisissons.fr</p>
+            <p>Benjamin Colleu<br />Micro-entrepreneur — SIRET : 445 241 649 00059<br />Adresse : Dordogne (24), France<br />Contact : contact@choisissons.fr</p>
           </div>
           <div>
             <p className="font-semibold text-slate-700 mb-1">Directeur de la publication</p>
@@ -2492,7 +2520,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
           </div>
           <div>
             <p className="font-semibold text-slate-700 mb-1">Hébergement</p>
-            <p>Frontend : Vercel Inc. — 340 Pine Street, Suite 1600, San Francisco, CA 94104, USA<br/>Base de données : Supabase — serveur région West EU (Paris, France)</p>
+            <p>Frontend : Vercel Inc. — 340 Pine Street, Suite 1600, San Francisco, CA 94104, USA<br />Base de données : Supabase — serveur région West EU (Paris, France)</p>
           </div>
           <div>
             <p className="font-semibold text-slate-700 mb-1">Propriété intellectuelle</p>
@@ -2689,34 +2717,34 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         (o.type === 'ong' && userPlan === 'ong') ||
         (o.type === 'media' && userPlan === 'media')
       ).length > 0 && (
-        <div className="mb-4 space-y-2">
-          {joinedOrgs.filter(o =>
-            (o.type === 'ong' && userPlan === 'ong') ||
-            (o.type === 'media' && userPlan === 'media')
-          ).map(org => {
-            const bgColor = org.type === 'ong' ? '#854f0b' : '#334155'
-            const icon    = org.type === 'ong' ? <Users size={16} className="text-amber-200 flex-shrink-0" /> : <Newspaper size={16} className="text-slate-300 flex-shrink-0" />
-            const sub     = org.type === 'ong' ? 'ONG / Association' : 'Média'
-            return (
-              <button
-                key={org.id}
-                onClick={() => onNavigateOrg(org)}
-                className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-white active:scale-95 transition-all shadow-sm"
-                style={{ backgroundColor: bgColor }}
-              >
-                <div className="flex items-center gap-3">
-                  {icon}
-                  <div className="text-left">
-                    <p className="text-sm font-semibold leading-tight">Tableau de bord {sub}</p>
-                    <p className="text-xs mt-0.5 opacity-70">{org.name}</p>
+          <div className="mb-4 space-y-2">
+            {joinedOrgs.filter(o =>
+              (o.type === 'ong' && userPlan === 'ong') ||
+              (o.type === 'media' && userPlan === 'media')
+            ).map(org => {
+              const bgColor = org.type === 'ong' ? '#854f0b' : '#334155'
+              const icon = org.type === 'ong' ? <Users size={16} className="text-amber-200 flex-shrink-0" /> : <Newspaper size={16} className="text-slate-300 flex-shrink-0" />
+              const sub = org.type === 'ong' ? 'ONG / Association' : 'Média'
+              return (
+                <button
+                  key={org.id}
+                  onClick={() => onNavigateOrg(org)}
+                  className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-white active:scale-95 transition-all shadow-sm"
+                  style={{ backgroundColor: bgColor }}
+                >
+                  <div className="flex items-center gap-3">
+                    {icon}
+                    <div className="text-left">
+                      <p className="text-sm font-semibold leading-tight">Tableau de bord {sub}</p>
+                      <p className="text-xs mt-0.5 opacity-70">{org.name}</p>
+                    </div>
                   </div>
-                </div>
-                <ChevronRight size={16} className="opacity-60 flex-shrink-0" />
-              </button>
-            )
-          })}
-        </div>
-      )}
+                  <ChevronRight size={16} className="opacity-60 flex-shrink-0" />
+                </button>
+              )
+            })}
+          </div>
+        )}
 
       {/* Mes votes */}
       <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
@@ -2803,9 +2831,9 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         <h3 className="font-bold text-slate-800 text-sm mb-3">Informations légales</h3>
         <div className="space-y-1">
           {[
-            { key: 'cgu',     label: "Conditions Générales d'Utilisation", icon: FileText },
-            { key: 'privacy', label: 'Politique de confidentialité',       icon: Shield },
-            { key: 'legal',   label: 'Mentions légales',                   icon: Landmark },
+            { key: 'cgu', label: "Conditions Générales d'Utilisation", icon: FileText },
+            { key: 'privacy', label: 'Politique de confidentialité', icon: Shield },
+            { key: 'legal', label: 'Mentions légales', icon: Landmark },
           ].map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -3002,19 +3030,19 @@ interface OrgComment {
 }
 
 function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }) {
-  const [followerCount, setFollowerCount]   = useState<number | null>(null)
-  const [proposals, setProposals]           = useState<OrgProposal[]>([])
-  const [nationalLaws, setNationalLaws]     = useState<Proposal[]>([])
-  const [comments, setComments]             = useState<Record<string, OrgComment[]>>({})
-  const [loadingStats, setLoadingStats]     = useState(true)
+  const [followerCount, setFollowerCount] = useState<number | null>(null)
+  const [proposals, setProposals] = useState<OrgProposal[]>([])
+  const [nationalLaws, setNationalLaws] = useState<Proposal[]>([])
+  const [comments, setComments] = useState<Record<string, OrgComment[]>>({})
+  const [loadingStats, setLoadingStats] = useState(true)
 
-  const [showPropForm, setShowPropForm]     = useState(false)
-  const [propTitle, setPropTitle]           = useState('')
+  const [showPropForm, setShowPropForm] = useState(false)
+  const [propTitle, setPropTitle] = useState('')
   const [propDescription, setPropDescription] = useState('')
   const [submittingProp, setSubmittingProp] = useState(false)
 
   const [commentingLawId, setCommentingLawId] = useState<string | null>(null)
-  const [commentText, setCommentText]         = useState('')
+  const [commentText, setCommentText] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
 
   useEffect(() => {
@@ -3071,8 +3099,8 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
 
   const headerColor = org.type === 'ong' ? '#854f0b' : '#334155'
   const accentClass = org.type === 'ong' ? 'text-amber-200' : 'text-slate-300'
-  const typeLabel   = org.type === 'ong' ? 'ONG / Association' : 'Média'
-  const typeBadge   = org.type === 'ong' ? 'bg-amber-900/50 text-amber-200' : 'bg-slate-600/50 text-slate-300'
+  const typeLabel = org.type === 'ong' ? 'ONG / Association' : 'Média'
+  const typeBadge = org.type === 'ong' ? 'bg-amber-900/50 text-amber-200' : 'bg-slate-600/50 text-slate-300'
 
   async function handleSubmitProposal() {
     if (!propTitle.trim()) return
@@ -3131,11 +3159,11 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
   }
 
   const statusTag: Record<string, { text: string; color: string }> = {
-    voting:   { text: 'En vote',   color: 'bg-indigo-100 text-indigo-700' },
+    voting: { text: 'En vote', color: 'bg-indigo-100 text-indigo-700' },
     seedling: { text: 'Pépinière', color: 'bg-emerald-100 text-emerald-700' },
-    review:   { text: 'Jury',      color: 'bg-amber-100 text-amber-700' },
-    adopted:  { text: 'Adoptée',   color: 'bg-green-100 text-green-700' },
-    rejected: { text: 'Rejetée',   color: 'bg-red-100 text-red-600' },
+    review: { text: 'Jury', color: 'bg-amber-100 text-amber-700' },
+    adopted: { text: 'Adoptée', color: 'bg-green-100 text-green-700' },
+    rejected: { text: 'Rejetée', color: 'bg-red-100 text-red-600' },
   }
 
   return (
@@ -3170,10 +3198,10 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
       <div className="px-4 pt-4">
         <div className="grid grid-cols-2 gap-3 mb-5">
           {[
-            { label: 'Abonnés',         value: loadingStats ? '—' : (followerCount ?? 0).toLocaleString('fr-FR'), sub: 'citoyens abonnés' },
-            { label: 'Propositions',    value: loadingStats ? '—' : proposals.length.toString(),                  sub: 'publiées' },
-            { label: 'Votes reçus',     value: loadingStats ? '—' : totalVotes.toLocaleString('fr-FR'),           sub: 'sur vos propositions' },
-            { label: 'Engagement',      value: loadingStats ? '—' : `${engagementRate}%`,                         sub: 'votes / abonnés' },
+            { label: 'Abonnés', value: loadingStats ? '—' : (followerCount ?? 0).toLocaleString('fr-FR'), sub: 'citoyens abonnés' },
+            { label: 'Propositions', value: loadingStats ? '—' : proposals.length.toString(), sub: 'publiées' },
+            { label: 'Votes reçus', value: loadingStats ? '—' : totalVotes.toLocaleString('fr-FR'), sub: 'sur vos propositions' },
+            { label: 'Engagement', value: loadingStats ? '—' : `${engagementRate}%`, sub: 'votes / abonnés' },
           ].map(stat => (
             <div key={stat.label} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
               <p className="text-xs text-slate-500 leading-snug mb-1">{stat.label}</p>
@@ -3215,9 +3243,9 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
             <div className="space-y-3">
               {proposals.map(p => {
                 const total = (p.votes_pour ?? 0) + (p.votes_contre ?? 0) + (p.votes_blanc ?? 0)
-                const pourPct   = total > 0 ? Math.round((p.votes_pour   / total) * 100) : 0
+                const pourPct = total > 0 ? Math.round((p.votes_pour / total) * 100) : 0
                 const contrePct = total > 0 ? Math.round((p.votes_contre / total) * 100) : 0
-                const blancPct  = 100 - pourPct - contrePct
+                const blancPct = 100 - pourPct - contrePct
                 const s = statusTag[p.status] ?? { text: p.status, color: 'bg-slate-100 text-slate-600' }
                 return (
                   <div key={p.id} className="bg-white rounded-2xl p-4 border border-slate-100">
@@ -3231,7 +3259,7 @@ function OrgDashboard({ org, onBack }: { org: Organisation; onBack: () => void }
                       <>
                         <div className="flex h-1.5 rounded-full overflow-hidden mb-1">
                           <div className="bg-green-500 transition-all" style={{ width: `${pourPct}%` }} />
-                          <div className="bg-red-400 transition-all"   style={{ width: `${contrePct}%` }} />
+                          <div className="bg-red-400 transition-all" style={{ width: `${contrePct}%` }} />
                           <div className="bg-slate-200 transition-all" style={{ width: `${blancPct}%` }} />
                         </div>
                         <div className="flex justify-between text-xs">
@@ -3407,24 +3435,24 @@ interface LocalConsultation {
 }
 
 function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation; userRole: CommuneRole; onBack: () => void }) {
-  const [memberCount, setMemberCount]       = useState<number | null>(null)
-  const [nationalLaws, setNationalLaws]     = useState<Proposal[]>([])
-  const [consultations, setConsultations]   = useState<LocalConsultation[]>([])
-  const [loadingStats, setLoadingStats]     = useState(true)
+  const [memberCount, setMemberCount] = useState<number | null>(null)
+  const [nationalLaws, setNationalLaws] = useState<Proposal[]>([])
+  const [consultations, setConsultations] = useState<LocalConsultation[]>([])
+  const [loadingStats, setLoadingStats] = useState(true)
 
-  const [showInvite, setShowInvite]         = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
   const inviteUrl = `https://choisissons.fr?commune=${encodeURIComponent(commune.name)}`
 
-  const [showForm, setShowForm]             = useState(false)
-  const [formTitle, setFormTitle]           = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [formTitle, setFormTitle] = useState('')
   const [formDescription, setFormDescription] = useState('')
-  const [formDuration, setFormDuration]     = useState(30)
-  const [submitting, setSubmitting]         = useState(false)
+  const [formDuration, setFormDuration] = useState(30)
+  const [submitting, setSubmitting] = useState(false)
 
   // Member management (admin only)
   interface TeamMember { id: string; user_hash: string; role: CommuneRole; created_at: string }
-  const [teamMembers, setTeamMembers]           = useState<TeamMember[]>([])
-  const [loadingTeam, setLoadingTeam]           = useState(false)
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [loadingTeam, setLoadingTeam] = useState(false)
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -3546,11 +3574,11 @@ function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation
   }
 
   const statusTag: Record<string, { text: string; color: string }> = {
-    voting:   { text: 'En vote',    color: 'bg-indigo-100 text-indigo-700' },
-    seedling: { text: 'Brouillon',  color: 'bg-slate-100 text-slate-600' },
-    review:   { text: 'En révision', color: 'bg-amber-100 text-amber-700' },
-    adopted:  { text: 'Terminée',   color: 'bg-green-100 text-green-700' },
-    rejected: { text: 'Clôturée',   color: 'bg-red-100 text-red-600' },
+    voting: { text: 'En vote', color: 'bg-indigo-100 text-indigo-700' },
+    seedling: { text: 'Brouillon', color: 'bg-slate-100 text-slate-600' },
+    review: { text: 'En révision', color: 'bg-amber-100 text-amber-700' },
+    adopted: { text: 'Terminée', color: 'bg-green-100 text-green-700' },
+    rejected: { text: 'Clôturée', color: 'bg-red-100 text-red-600' },
   }
 
   return (
@@ -3651,9 +3679,9 @@ function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation
             <div className="space-y-3">
               {nationalLaws.map(law => {
                 const total = law.votes.pour + law.votes.contre + law.votes.blanc
-                const pourPct   = total > 0 ? Math.round((law.votes.pour   / total) * 100) : 0
+                const pourPct = total > 0 ? Math.round((law.votes.pour / total) * 100) : 0
                 const contrePct = total > 0 ? Math.round((law.votes.contre / total) * 100) : 0
-                const blancPct  = 100 - pourPct - contrePct
+                const blancPct = 100 - pourPct - contrePct
                 return (
                   <div key={law.id} className="bg-white rounded-2xl p-4 border border-slate-100">
                     <p className="text-sm font-semibold text-slate-800 mb-0.5">{law.title}</p>
@@ -3662,7 +3690,7 @@ function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation
                       <>
                         <div className="flex h-2 rounded-full overflow-hidden mb-1.5">
                           <div className="bg-green-500 transition-all" style={{ width: `${pourPct}%` }} />
-                          <div className="bg-red-400 transition-all"   style={{ width: `${contrePct}%` }} />
+                          <div className="bg-red-400 transition-all" style={{ width: `${contrePct}%` }} />
                           <div className="bg-slate-200 transition-all" style={{ width: `${blancPct}%` }} />
                         </div>
                         <div className="flex justify-between text-xs">
@@ -3727,60 +3755,60 @@ function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation
             </div>
           )}
           {/* Member management — admin only */}
-        {canDo(userRole, 'manage_members') && (
-          <div className="mb-8">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Gestion de l'équipe</h2>
-            {loadingTeam ? (
-              <div className="space-y-2">
-                {[1, 2].map(i => <div key={i} className="h-12 bg-white rounded-2xl border border-slate-100 animate-pulse" />)}
-              </div>
-            ) : teamMembers.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-100 p-5 text-center">
-                <p className="text-sm text-slate-400">Aucun membre enregistré</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {teamMembers.map(m => {
-                  const ROLE_LABELS: Record<CommuneRole, string> = {
-                    admin:        'Administrateur',
-                    elu:          'Élu(e)',
-                    agent_com:    'Agent comm.',
-                    lecteur_admin:'Lecteur admin',
-                    member:       'Habitant',
-                  }
-                  return (
-                    <div key={m.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-mono text-slate-500 truncate">{m.user_hash.slice(0, 16)}…</p>
-                        <p className="text-xs text-slate-400">{m.created_at?.slice(0, 10)}</p>
+          {canDo(userRole, 'manage_members') && (
+            <div className="mb-8">
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Gestion de l'équipe</h2>
+              {loadingTeam ? (
+                <div className="space-y-2">
+                  {[1, 2].map(i => <div key={i} className="h-12 bg-white rounded-2xl border border-slate-100 animate-pulse" />)}
+                </div>
+              ) : teamMembers.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 text-center">
+                  <p className="text-sm text-slate-400">Aucun membre enregistré</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {teamMembers.map(m => {
+                    const ROLE_LABELS: Record<CommuneRole, string> = {
+                      admin: 'Administrateur',
+                      elu: 'Élu(e)',
+                      agent_com: 'Agent comm.',
+                      lecteur_admin: 'Lecteur admin',
+                      member: 'Habitant',
+                    }
+                    return (
+                      <div key={m.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-mono text-slate-500 truncate">{m.user_hash.slice(0, 16)}…</p>
+                          <p className="text-xs text-slate-400">{m.created_at?.slice(0, 10)}</p>
+                        </div>
+                        <select
+                          value={m.role}
+                          onChange={e => handleRoleChange(m.id, e.target.value as CommuneRole)}
+                          disabled={updatingMemberId === m.id}
+                          className="text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg px-2 py-1.5 outline-none cursor-pointer disabled:opacity-50"
+                        >
+                          {(Object.entries(ROLE_LABELS) as [CommuneRole, string][]).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleRemoveMember(m.id)}
+                          disabled={updatingMemberId === m.id}
+                          className="flex-shrink-0 w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-400 hover:bg-red-100 active:scale-95 transition-all disabled:opacity-40"
+                        >
+                          {updatingMemberId === m.id
+                            ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                            : <Trash2 size={12} />}
+                        </button>
                       </div>
-                      <select
-                        value={m.role}
-                        onChange={e => handleRoleChange(m.id, e.target.value as CommuneRole)}
-                        disabled={updatingMemberId === m.id}
-                        className="text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg px-2 py-1.5 outline-none cursor-pointer disabled:opacity-50"
-                      >
-                        {(Object.entries(ROLE_LABELS) as [CommuneRole, string][]).map(([k, v]) => (
-                          <option key={k} value={k}>{v}</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => handleRemoveMember(m.id)}
-                        disabled={updatingMemberId === m.id}
-                        className="flex-shrink-0 w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-400 hover:bg-red-100 active:scale-95 transition-all disabled:opacity-40"
-                      >
-                        {updatingMemberId === m.id
-                          ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
-                          : <Trash2 size={12} />}
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Create consultation modal */}
@@ -3856,22 +3884,22 @@ function ElectedDashboard({ commune, userRole, onBack }: { commune: Organisation
 
 // ── Support Page ──────────────────────────────────────────────
 const COMMUNE_TIERS = [
-  { value: 'small',  label: 'Moins de 5 000 habitants',    price: '49€'  },
+  { value: 'small', label: 'Moins de 5 000 habitants', price: '49€' },
   { value: 'medium', label: 'De 5 000 à 50 000 habitants', price: '149€' },
-  { value: 'large',  label: 'Plus de 50 000 habitants',    price: '499€' },
+  { value: 'large', label: 'Plus de 50 000 habitants', price: '499€' },
 ] as const
 type CommuneTier = typeof COMMUNE_TIERS[number]['value']
 
 const COMMUNE_PLAN_MAP: Record<CommuneTier, string> = {
-  small:  'commune_petite',
+  small: 'commune_petite',
   medium: 'commune_moyenne',
-  large:  'commune_grande',
+  large: 'commune_grande',
 }
 
 const ASSOC_TIERS = [
-  { value: 's', label: "Jusqu'à 50 adhérents",  price: '9€'  },
+  { value: 's', label: "Jusqu'à 50 adhérents", price: '9€' },
   { value: 'm', label: "Jusqu'à 200 adhérents", price: '19€' },
-  { value: 'l', label: 'Adhérents illimités',   price: '49€' },
+  { value: 'l', label: 'Adhérents illimités', price: '49€' },
 ] as const
 type AssocTier = typeof ASSOC_TIERS[number]['value']
 
@@ -3882,22 +3910,22 @@ const ASSOC_PLAN_MAP: Record<AssocTier, string> = {
 }
 
 const STRIPE_PRODUCT_IDS: Record<string, string> = {
-  citoyen:         'prod_UarythbFH8E5hs',
-  media:           'prod_UarzuwtLFr24b3',
-  ong:             'prod_UarzdtYPKStpea',
-  assoc_s:         'prod_Uas37yPOMHouwu',
-  assoc_m:         'prod_Uas4bJ3ZTxSv9i',
-  assoc_l:         'prod_Uas5VkdubNnzPK',
-  commune_petite:  'prod_Uas0rN3qtJiScl',
+  citoyen: 'prod_UarythbFH8E5hs',
+  media: 'prod_UarzuwtLFr24b3',
+  ong: 'prod_UarzdtYPKStpea',
+  assoc_s: 'prod_Uas37yPOMHouwu',
+  assoc_m: 'prod_Uas4bJ3ZTxSv9i',
+  assoc_l: 'prod_Uas5VkdubNnzPK',
+  commune_petite: 'prod_Uas0rN3qtJiScl',
   commune_moyenne: 'prod_Uas1PSHZycVXkh',
-  commune_grande:  'prod_Uas2pkPYdwxQ1h',
+  commune_grande: 'prod_Uas2pkPYdwxQ1h',
 }
 
 function SupportPage() {
-  const [selected, setSelected]               = useState<string | null>(null)
-  const [communeSize, setCommuneSize]         = useState<CommuneTier>('small')
-  const [assocSize, setAssocSize]             = useState<AssocTier>('s')
-  const [expanded, setExpanded]               = useState<'commune' | 'assoc' | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [communeSize, setCommuneSize] = useState<CommuneTier>('small')
+  const [assocSize, setAssocSize] = useState<AssocTier>('s')
+  const [expanded, setExpanded] = useState<'commune' | 'assoc' | null>(null)
   const [loadingCheckout, setLoadingCheckout] = useState<string | null>(null)
 
   async function handleCheckout(plan: string) {
@@ -3984,9 +4012,8 @@ function SupportPage() {
             <button
               onClick={() => selected === 'citoyen' ? void handleCheckout('citoyen') : setSelected('citoyen')}
               disabled={loadingCheckout === 'citoyen'}
-              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
-                selected === 'citoyen' ? 'bg-slate-800 text-white' : 'bg-indigo-600 text-white'
-              }`}
+              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${selected === 'citoyen' ? 'bg-slate-800 text-white' : 'bg-indigo-600 text-white'
+                }`}
             >
               {loadingCheckout === 'citoyen' ? 'Redirection…' : selected === 'citoyen' ? '✓ Sélectionné — Passer au paiement →' : 'Soutenir la démocratie'}
             </button>
@@ -4022,11 +4049,10 @@ function SupportPage() {
                     <button
                       key={t.value}
                       onClick={() => setCommuneSize(t.value)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                        communeSize === t.value
-                          ? 'border-teal-500 bg-teal-50 text-teal-800'
-                          : 'border-slate-200 bg-slate-50 text-slate-600'
-                      }`}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${communeSize === t.value
+                        ? 'border-teal-500 bg-teal-50 text-teal-800'
+                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                        }`}
                     >
                       <span>{t.label}</span>
                       <span className={`font-black ${communeSize === t.value ? 'text-teal-700' : 'text-slate-400'}`}>
@@ -4046,9 +4072,8 @@ function SupportPage() {
               <button
                 onClick={() => selected === 'commune' ? void handleCheckout(COMMUNE_PLAN_MAP[communeSize]) : setSelected('commune')}
                 disabled={loadingCheckout === 'commune'}
-                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
-                  selected === 'commune' ? 'bg-slate-800 text-white' : 'bg-teal-700 text-white'
-                }`}
+                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${selected === 'commune' ? 'bg-slate-800 text-white' : 'bg-teal-700 text-white'
+                  }`}
               >
                 {loadingCheckout === 'commune' ? 'Redirection…' : selected === 'commune' ? '✓ Sélectionné — Passer au paiement →' : 'Équiper ma commune'}
               </button>
@@ -4085,11 +4110,10 @@ function SupportPage() {
                     <button
                       key={t.value}
                       onClick={() => setAssocSize(t.value)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                        assocSize === t.value
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-                          : 'border-slate-200 bg-slate-50 text-slate-600'
-                      }`}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${assocSize === t.value
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                        }`}
                     >
                       <span>{t.label}</span>
                       <span className={`font-black ${assocSize === t.value ? 'text-emerald-700' : 'text-slate-400'}`}>
@@ -4109,9 +4133,8 @@ function SupportPage() {
               <button
                 onClick={() => selected === 'assoc' ? void handleCheckout(ASSOC_PLAN_MAP[assocSize]) : setSelected('assoc')}
                 disabled={loadingCheckout === 'assoc'}
-                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
-                  selected === 'assoc' ? 'bg-slate-800 text-white' : 'bg-emerald-700 text-white'
-                }`}
+                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${selected === 'assoc' ? 'bg-slate-800 text-white' : 'bg-emerald-700 text-white'
+                  }`}
               >
                 {loadingCheckout === 'assoc' ? 'Redirection…' : selected === 'assoc' ? '✓ Sélectionné — Passer au paiement →' : 'Rejoindre en association'}
               </button>
@@ -4142,9 +4165,8 @@ function SupportPage() {
             <button
               onClick={() => selected === 'ong' ? void handleCheckout('ong') : setSelected('ong')}
               disabled={loadingCheckout === 'ong'}
-              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
-                selected === 'ong' ? 'bg-slate-800 text-white' : 'bg-amber-600 text-white'
-              }`}
+              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${selected === 'ong' ? 'bg-slate-800 text-white' : 'bg-amber-600 text-white'
+                }`}
             >
               {loadingCheckout === 'ong' ? 'Redirection…' : selected === 'ong' ? '✓ Sélectionné — Passer au paiement →' : 'Rejoindre en ONG'}
             </button>
@@ -4174,9 +4196,8 @@ function SupportPage() {
             <button
               onClick={() => selected === 'media' ? void handleCheckout('media') : setSelected('media')}
               disabled={loadingCheckout === 'media'}
-              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${
-                selected === 'media' ? 'bg-slate-800 text-white' : 'bg-slate-600 text-white'
-              }`}
+              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 ${selected === 'media' ? 'bg-slate-800 text-white' : 'bg-slate-600 text-white'
+                }`}
             >
               {loadingCheckout === 'media' ? 'Redirection…' : selected === 'media' ? '✓ Sélectionné — Passer au paiement →' : 'Accès média'}
             </button>
@@ -4213,21 +4234,21 @@ function CountUp({ value, duration = 1800 }: { value: number; duration?: number 
 }
 
 const IMPACT_CATEGORIES: { name: string; color: string }[] = [
-  { name: 'Économie',      color: 'bg-yellow-400' },
-  { name: 'Social',        color: 'bg-blue-400'   },
-  { name: 'Numérique',     color: 'bg-purple-400' },
-  { name: 'Institutions',  color: 'bg-indigo-400' },
-  { name: 'Environnement', color: 'bg-green-400'  },
-  { name: 'Justice',       color: 'bg-violet-400' },
+  { name: 'Économie', color: 'bg-yellow-400' },
+  { name: 'Social', color: 'bg-blue-400' },
+  { name: 'Numérique', color: 'bg-purple-400' },
+  { name: 'Institutions', color: 'bg-indigo-400' },
+  { name: 'Environnement', color: 'bg-green-400' },
+  { name: 'Justice', color: 'bg-violet-400' },
 ]
 
 function ImpactPage() {
-  const [citizens,          setCitizens]          = useState(0)
-  const [votes,             setVotes]             = useState(0)
-  const [activeProposals,   setActiveProposals]   = useState(0)
-  const [adoptedProposals,  setAdoptedProposals]  = useState(0)
-  const [categoryData,      setCategoryData]      = useState<{ name: string; count: number; color: string }[]>([])
-  const [loading,           setLoading]           = useState(true)
+  const [citizens, setCitizens] = useState(0)
+  const [votes, setVotes] = useState(0)
+  const [activeProposals, setActiveProposals] = useState(0)
+  const [adoptedProposals, setAdoptedProposals] = useState(0)
+  const [categoryData, setCategoryData] = useState<{ name: string; count: number; color: string }[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -4265,10 +4286,10 @@ function ImpactPage() {
   const maxCategoryCount = Math.max(...categoryData.map(c => c.count), 1)
 
   const counters: { label: string; value: number; bg: string; icon: ElementType }[] = [
-    { label: 'Citoyens inscrits',      value: citizens,         bg: 'bg-indigo-600',  icon: Users        },
-    { label: 'Votes exprimés',         value: votes,            bg: 'bg-green-600',   icon: Vote         },
-    { label: 'Propositions en vote',   value: activeProposals,  bg: 'bg-amber-500',   icon: Sprout       },
-    { label: 'Propositions adoptées',  value: adoptedProposals, bg: 'bg-teal-600',    icon: CheckCircle  },
+    { label: 'Citoyens inscrits', value: citizens, bg: 'bg-indigo-600', icon: Users },
+    { label: 'Votes exprimés', value: votes, bg: 'bg-green-600', icon: Vote },
+    { label: 'Propositions en vote', value: activeProposals, bg: 'bg-amber-500', icon: Sprout },
+    { label: 'Propositions adoptées', value: adoptedProposals, bg: 'bg-teal-600', icon: CheckCircle },
   ]
 
   return (
@@ -4332,10 +4353,10 @@ function ImpactPage() {
 
 // ── Propose Modal ──────────────────────────────────────────────
 function ProposeModal({ onClose }: { onClose: () => void }) {
-  const [title, setTitle]             = useState('')
+  const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [category, setCategory]       = useState('')
-  const [submitted, setSubmitted]     = useState(false)
+  const [category, setCategory] = useState('')
+  const [submitted, setSubmitted] = useState(false)
 
   const categories = ['Économie', 'Environnement', 'Démocratie', 'Travail', 'Éducation', 'Santé', 'Logement', 'Justice', 'Autre']
 
@@ -4407,11 +4428,10 @@ function ProposeModal({ onClose }: { onClose: () => void }) {
                 key={cat}
                 type="button"
                 onClick={() => setCategory(cat)}
-                className={`py-2 px-3 rounded-xl text-sm font-medium border transition-all ${
-                  category === cat
-                    ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-200 bg-white text-slate-600'
-                }`}
+                className={`py-2 px-3 rounded-xl text-sm font-medium border transition-all ${category === cat
+                  ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                  : 'border-slate-200 bg-white text-slate-600'
+                  }`}
               >
                 {cat}
               </button>
@@ -4445,9 +4465,9 @@ interface AdminProposal {
 }
 
 function AdminDashboard({ onBack }: { onBack: () => void }) {
-  const [proposals, setProposals]     = useState<AdminProposal[]>([])
-  const [loading, setLoading]         = useState(true)
-  const [urneCount, setUrneCount]     = useState<number | null>(null)
+  const [proposals, setProposals] = useState<AdminProposal[]>([])
+  const [loading, setLoading] = useState(true)
+  const [urneCount, setUrneCount] = useState<number | null>(null)
   const [registreCount, setRegistreCount] = useState<number | null>(null)
   const [actioningId, setActioningId] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<'review' | 'all' | 'stats'>('review')
@@ -4527,11 +4547,11 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
 
   const statusLabel: Record<string, { text: string; color: string }> = {
     seedling: { text: 'Pépinière', color: 'bg-emerald-100 text-emerald-700' },
-    review:   { text: 'En examen', color: 'bg-amber-100 text-amber-700' },
-    voting:   { text: 'Vote',      color: 'bg-indigo-100 text-indigo-700' },
-    adopted:  { text: 'Adoptée',   color: 'bg-green-100 text-green-700' },
-    rejected: { text: 'Rejetée',   color: 'bg-red-100 text-red-600' },
-    closed:   { text: 'Clôturé',   color: 'bg-teal-100 text-teal-700' },
+    review: { text: 'En examen', color: 'bg-amber-100 text-amber-700' },
+    voting: { text: 'Vote', color: 'bg-indigo-100 text-indigo-700' },
+    adopted: { text: 'Adoptée', color: 'bg-green-100 text-green-700' },
+    rejected: { text: 'Rejetée', color: 'bg-red-100 text-red-600' },
+    closed: { text: 'Clôturé', color: 'bg-teal-100 text-teal-700' },
   }
 
   return (
@@ -4560,15 +4580,14 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
       <div className="flex gap-1 bg-slate-200 mx-4 mt-4 rounded-xl p-1">
         {([
           { key: 'review' as const, label: `En attente (${reviewProposals.length})` },
-          { key: 'all'    as const, label: 'Toutes' },
-          { key: 'stats'  as const, label: 'Stats' },
+          { key: 'all' as const, label: 'Toutes' },
+          { key: 'stats' as const, label: 'Stats' },
         ]).map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveSection(tab.key)}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-              activeSection === tab.key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
-            }`}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${activeSection === tab.key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
+              }`}
           >
             {tab.label}
           </button>
@@ -4769,12 +4788,12 @@ function LibraryPage() {
 
   const CATEGORIES = ['Toutes', 'Économie', 'Social', 'Numérique', 'Institutions', 'Sécurité', 'Défense', 'Environnement', 'Justice']
 
-  const [entries, setEntries]           = useState<LibraryEntry[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [search, setSearch]             = useState('')
+  const [entries, setEntries] = useState<LibraryEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('Toutes')
   const [statusFilter, setStatusFilter] = useState<'all' | 'adopted' | 'rejected' | 'closed'>('all')
-  const [sortBy, setSortBy]             = useState<SortKey>('recent')
+  const [sortBy, setSortBy] = useState<SortKey>('recent')
 
   useEffect(() => {
     let cancelled = false
@@ -4796,29 +4815,29 @@ function LibraryPage() {
         if (cancelled) return
 
         const citizen: LibraryEntry[] = (proposalsRes.data ?? []).map(p => ({
-          id:           String(p.id),
-          title:        (p.title       as string) ?? '',
-          description:  (p.description as string) ?? '',
-          category:     (p.category    as string) ?? '',
-          status:       p.status as string,
-          type:         'citizen' as const,
-          votes_pour:   (p.votes_pour   as number) ?? 0,
+          id: String(p.id),
+          title: (p.title as string) ?? '',
+          description: (p.description as string) ?? '',
+          category: (p.category as string) ?? '',
+          status: p.status as string,
+          type: 'citizen' as const,
+          votes_pour: (p.votes_pour as number) ?? 0,
           votes_contre: (p.votes_contre as number) ?? 0,
-          votes_blanc:  (p.votes_blanc  as number) ?? 0,
-          date:         (p.created_at  as string) ?? '',
+          votes_blanc: (p.votes_blanc as number) ?? 0,
+          date: (p.created_at as string) ?? '',
         }))
 
         const laws: LibraryEntry[] = (lawsRes.data ?? []).map(l => ({
-          id:           String(l.id),
-          title:        (l.title       as string) ?? '',
-          description:  (l.description as string) ?? '',
-          category:     (l.category    as string) ?? '',
-          status:       l.stage as string,
-          type:         'law' as const,
-          votes_pour:   (l.votes as { pour: number }  | null)?.pour   ?? 0,
+          id: String(l.id),
+          title: (l.title as string) ?? '',
+          description: (l.description as string) ?? '',
+          category: (l.category as string) ?? '',
+          status: l.stage as string,
+          type: 'law' as const,
+          votes_pour: (l.votes as { pour: number } | null)?.pour ?? 0,
           votes_contre: (l.votes as { contre: number } | null)?.contre ?? 0,
-          votes_blanc:  (l.votes as { blanc: number }  | null)?.blanc  ?? 0,
-          date:         (l.synced_at  as string) ?? '',
+          votes_blanc: (l.votes as { blanc: number } | null)?.blanc ?? 0,
+          date: (l.synced_at as string) ?? '',
         }))
 
         setEntries(
@@ -4843,7 +4862,7 @@ function LibraryPage() {
       )
     }
     if (activeCategory !== 'Toutes') result = result.filter(e => e.category === activeCategory)
-    if (statusFilter !== 'all')      result = result.filter(e => e.status === statusFilter)
+    if (statusFilter !== 'all') result = result.filter(e => e.status === statusFilter)
     if (sortBy === 'votes') {
       return [...result].sort(
         (a, b) => (b.votes_pour + b.votes_contre + b.votes_blanc) - (a.votes_pour + a.votes_contre + a.votes_blanc)
@@ -4855,18 +4874,18 @@ function LibraryPage() {
 
   function downloadOpenData() {
     const payload = entries.map(e => ({
-      proposal_id:  e.id,
-      title:        e.title,
-      type:         e.type === 'law' ? 'loi_parlementaire' : 'proposition_citoyenne',
-      votes_pour:   e.votes_pour,
+      proposal_id: e.id,
+      title: e.title,
+      type: e.type === 'law' ? 'loi_parlementaire' : 'proposition_citoyenne',
+      votes_pour: e.votes_pour,
       votes_contre: e.votes_contre,
-      votes_blanc:  e.votes_blanc,
-      closed_at:    e.date,
+      votes_blanc: e.votes_blanc,
+      closed_at: e.date,
     }))
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href     = url
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
     a.download = 'choisissons-donnees-publiques.json'
     document.body.appendChild(a)
     a.click()
@@ -4910,11 +4929,10 @@ function LibraryPage() {
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                activeCategory === cat
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 text-slate-600'
-              }`}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${activeCategory === cat
+                ? 'bg-indigo-600 text-white'
+                : 'bg-slate-100 text-slate-600'
+                }`}
             >
               {cat}
             </button>
@@ -4925,19 +4943,18 @@ function LibraryPage() {
         <div className="flex items-center justify-between gap-2 mb-4">
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
             {([
-              { key: 'all',      label: 'Tous' },
-              { key: 'adopted',  label: 'Adoptées' },
+              { key: 'all', label: 'Tous' },
+              { key: 'adopted', label: 'Adoptées' },
               { key: 'rejected', label: 'Rejetées' },
-              { key: 'closed',   label: 'Clôturées' },
+              { key: 'closed', label: 'Clôturées' },
             ] as const).map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setStatusFilter(key)}
-                className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  statusFilter === key
-                    ? 'bg-slate-800 text-white'
-                    : 'bg-slate-100 text-slate-500'
-                }`}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${statusFilter === key
+                  ? 'bg-slate-800 text-white'
+                  : 'bg-slate-100 text-slate-500'
+                  }`}
               >
                 {label}
               </button>
@@ -4982,11 +4999,11 @@ function LibraryPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-3">
             {filtered.map(entry => {
-              const total     = entry.votes_pour + entry.votes_contre + entry.votes_blanc
-              const pctPour   = total > 0 ? Math.round((entry.votes_pour   / total) * 100) : 0
+              const total = entry.votes_pour + entry.votes_contre + entry.votes_blanc
+              const pctPour = total > 0 ? Math.round((entry.votes_pour / total) * 100) : 0
               const pctContre = total > 0 ? Math.round((entry.votes_contre / total) * 100) : 0
-              const pctBlanc  = total > 0 ? 100 - pctPour - pctContre : 0
-              const isAdopted  = entry.status === 'adopted'
+              const pctBlanc = total > 0 ? 100 - pctPour - pctContre : 0
+              const isAdopted = entry.status === 'adopted'
               const isRejected = entry.status === 'rejected'
               return (
                 <div key={entry.id} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
@@ -4998,9 +5015,8 @@ function LibraryPage() {
                       <h3 className="font-bold text-slate-800 text-sm leading-snug">{entry.title}</h3>
                     </div>
                     {(isAdopted || isRejected) && (
-                      <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${
-                        isAdopted ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                      }`}>
+                      <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${isAdopted ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                        }`}>
                         {isAdopted ? 'Adoptée' : 'Rejetée'}
                       </span>
                     )}
@@ -5014,9 +5030,9 @@ function LibraryPage() {
                   ) : (
                     <div className="space-y-1.5">
                       {([
-                        { label: 'Pour',   pct: pctPour,   color: 'bg-green-500' },
-                        { label: 'Contre', pct: pctContre, color: 'bg-red-500'   },
-                        { label: 'Blanc',  pct: pctBlanc,  color: 'bg-slate-300' },
+                        { label: 'Pour', pct: pctPour, color: 'bg-green-500' },
+                        { label: 'Contre', pct: pctContre, color: 'bg-red-500' },
+                        { label: 'Blanc', pct: pctBlanc, color: 'bg-slate-300' },
                       ] as const).map(({ label, pct, color }) => (
                         <div key={label} className="flex items-center gap-2">
                           <span className="text-xs text-slate-500 w-10 flex-shrink-0">{label}</span>
@@ -5070,31 +5086,31 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
   const [tab, setTab] = useState<'consultations' | 'archives' | 'actus' | 'agenda'>('consultations')
 
   // Consultations / archives
-  const [activeProposals,   setActiveProposals]   = useState<Proposal[]>([])
+  const [activeProposals, setActiveProposals] = useState<Proposal[]>([])
   const [archivedProposals, setArchivedProposals] = useState<Proposal[]>([])
-  const [loading,           setLoading]           = useState(true)
-  const [agoraProposal,     setAgoraProposal]     = useState<Proposal | null>(null)
-  const [votingProposal,    setVotingProposal]    = useState<Proposal | null>(null)
-  const [votedChoices,      setVotedChoices]      = useState<Record<string, VoteChoice>>({})
+  const [loading, setLoading] = useState(true)
+  const [agoraProposal, setAgoraProposal] = useState<Proposal | null>(null)
+  const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
+  const [votedChoices, setVotedChoices] = useState<Record<string, VoteChoice>>({})
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
 
   // Actualités (news)
-  const [news, setNews]             = useState<CommuneNews[]>([])
+  const [news, setNews] = useState<CommuneNews[]>([])
   const [loadingNews, setLoadingNews] = useState(true)
   const [showNewsForm, setShowNewsForm] = useState(false)
-  const [newsTitle, setNewsTitle]   = useState('')
+  const [newsTitle, setNewsTitle] = useState('')
   const [newsContent, setNewsContent] = useState('')
   const [newsCategory, setNewsCategory] = useState<CommuneNews['category']>('info')
   const [submittingNews, setSubmittingNews] = useState(false)
 
   // Agenda
-  const [events, setEvents]         = useState<CommuneEvent[]>([])
+  const [events, setEvents] = useState<CommuneEvent[]>([])
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [showEventForm, setShowEventForm] = useState(false)
-  const [evTitle, setEvTitle]       = useState('')
-  const [evDesc, setEvDesc]         = useState('')
-  const [evDate, setEvDate]         = useState('')
-  const [evEndDate, setEvEndDate]   = useState('')
+  const [evTitle, setEvTitle] = useState('')
+  const [evDesc, setEvDesc] = useState('')
+  const [evDate, setEvDate] = useState('')
+  const [evEndDate, setEvEndDate] = useState('')
   const [evLocation, setEvLocation] = useState('')
   const [evCategory, setEvCategory] = useState<CommuneEvent['category']>('reunion')
   const [submittingEvent, setSubmittingEvent] = useState(false)
@@ -5119,7 +5135,7 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
             .order('created_at', { ascending: false }),
         ])
         if (!cancelled) {
-          if (activeRes.data)  setActiveProposals((activeRes.data as ProposalRow[]).map(mapRowToProposal))
+          if (activeRes.data) setActiveProposals((activeRes.data as ProposalRow[]).map(mapRowToProposal))
           if (archiveRes.data) setArchivedProposals((archiveRes.data as ProposalRow[]).map(mapRowToProposal))
         }
       } catch { /* fallback vide */ } finally {
@@ -5164,6 +5180,15 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
   }, [commune.id])
 
   const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) => {
+    const isRevote = oldChoice !== undefined
+    setVotingProposal(null)
+    setAgoraProposal(null)
+
+    const choiceMap: Record<VoteChoice, string> = {
+      pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
+    }
+    const mappedChoice = choiceMap[choice]
+
     setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
     setActiveProposals(prev => prev.map(p => {
       if (p.id !== proposalId) return p
@@ -5171,10 +5196,49 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
       if (oldChoice) v[oldChoice] = Math.max(0, v[oldChoice] - 1)
       return { ...p, votes: v }
     }))
-    setVotingProposal(null)
-    setAgoraProposal(null)
-    setResultsProposalId(proposalId)
-  }, [])
+
+    const proof = await generateVoteProof(proposalId, mappedChoice)
+    const voteParams = {
+      p_proposal_id: String(proposalId),
+      p_user_hash: userHash,
+      p_choice: mappedChoice,
+      p_proof_hash: proof,
+    }
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+
+    try {
+      const voteRes = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/deposer_bulletin`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(voteParams),
+        }
+      )
+      const voteResult = await voteRes.json()
+      const error = voteRes.ok ? null : voteResult
+
+      if (error) throw new Error('DB Error')
+
+      if (isRevote) {
+        showToast('Vote mis à jour ✓', 'info')
+      } else {
+        setResultsProposalId(proposalId)
+      }
+    } catch (e) {
+      const pending = loadPendingVotes()
+      if (!pending.some(v => v.proposalId === proposalId)) {
+        savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
+      }
+      showToast('Réseau faible. Vote sauvegardé et synchronisé à la prochaine connexion.', 'warning')
+    }
+  }, [userHash])
 
   async function handlePublishNews() {
     if (!newsTitle.trim() || !newsContent.trim()) return
@@ -5246,18 +5310,18 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
   }
 
   const NEWS_CATEGORY_STYLE: Record<CommuneNews['category'], { label: string; bg: string; text: string }> = {
-    info:      { label: 'Info',     bg: 'bg-blue-100',   text: 'text-blue-700' },
-    travaux:   { label: 'Travaux',  bg: 'bg-orange-100', text: 'text-orange-700' },
-    evenement: { label: 'Événement',bg: 'bg-green-100',  text: 'text-green-700' },
-    urgence:   { label: 'Urgence',  bg: 'bg-red-100',    text: 'text-red-700' },
+    info: { label: 'Info', bg: 'bg-blue-100', text: 'text-blue-700' },
+    travaux: { label: 'Travaux', bg: 'bg-orange-100', text: 'text-orange-700' },
+    evenement: { label: 'Événement', bg: 'bg-green-100', text: 'text-green-700' },
+    urgence: { label: 'Urgence', bg: 'bg-red-100', text: 'text-red-700' },
   }
 
   const EVENT_CATEGORY_STYLE: Record<CommuneEvent['category'], { label: string; bg: string; text: string }> = {
-    conseil: { label: 'Conseil',   bg: 'bg-indigo-100', text: 'text-indigo-700' },
-    fete:    { label: 'Fête',      bg: 'bg-purple-100', text: 'text-purple-700' },
-    marche:  { label: 'Marché',    bg: 'bg-amber-100',  text: 'text-amber-700' },
-    reunion: { label: 'Réunion',   bg: 'bg-slate-100',  text: 'text-slate-700' },
-    autre:   { label: 'Autre',     bg: 'bg-gray-100',   text: 'text-gray-600' },
+    conseil: { label: 'Conseil', bg: 'bg-indigo-100', text: 'text-indigo-700' },
+    fete: { label: 'Fête', bg: 'bg-purple-100', text: 'text-purple-700' },
+    marche: { label: 'Marché', bg: 'bg-amber-100', text: 'text-amber-700' },
+    reunion: { label: 'Réunion', bg: 'bg-slate-100', text: 'text-slate-700' },
+    autre: { label: 'Autre', bg: 'bg-gray-100', text: 'text-gray-600' },
   }
 
   return (
@@ -5294,18 +5358,17 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
       <div className="flex gap-1 overflow-x-auto px-4 mt-4 pb-1" style={{ scrollbarWidth: 'none' }}>
         {([
           { key: 'consultations' as const, label: 'Consultations' },
-          { key: 'archives'      as const, label: 'Archives'      },
-          { key: 'actus'         as const, label: 'Actualités'    },
-          { key: 'agenda'        as const, label: 'Agenda'        },
+          { key: 'archives' as const, label: 'Archives' },
+          { key: 'actus' as const, label: 'Actualités' },
+          { key: 'agenda' as const, label: 'Agenda' },
         ]).map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-              tab === t.key
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-slate-200 text-slate-500'
-            }`}
+            className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab === t.key
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-slate-200 text-slate-500'
+              }`}
           >
             {t.label}
           </button>
@@ -5364,10 +5427,10 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
           ) : (
             <div className="space-y-3">
               {archivedProposals.map(p => {
-                const total     = p.votes.pour + p.votes.contre + p.votes.blanc
-                const pourPct   = total > 0 ? Math.round((p.votes.pour   / total) * 100) : 0
+                const total = p.votes.pour + p.votes.contre + p.votes.blanc
+                const pourPct = total > 0 ? Math.round((p.votes.pour / total) * 100) : 0
                 const contrePct = total > 0 ? Math.round((p.votes.contre / total) * 100) : 0
-                const blancPct  = 100 - pourPct - contrePct
+                const blancPct = 100 - pourPct - contrePct
                 return (
                   <div key={p.id} className="bg-white rounded-2xl border border-slate-100 p-4">
                     <div className="flex items-start justify-between gap-2 mb-1">
@@ -5381,7 +5444,7 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
                       <>
                         <div className="flex h-2 rounded-full overflow-hidden mb-1.5">
                           <div className="bg-green-500" style={{ width: `${pourPct}%` }} />
-                          <div className="bg-red-400"   style={{ width: `${contrePct}%` }} />
+                          <div className="bg-red-400" style={{ width: `${contrePct}%` }} />
                           <div className="bg-slate-200" style={{ width: `${blancPct}%` }} />
                         </div>
                         <div className="flex justify-between text-xs">
@@ -5477,9 +5540,8 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
                           <button
                             key={k}
                             onClick={() => setNewsCategory(k)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                              newsCategory === k ? `${v.bg} ${v.text} border-current` : 'border-slate-200 text-slate-500 bg-white'
-                            }`}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${newsCategory === k ? `${v.bg} ${v.text} border-current` : 'border-slate-200 text-slate-500 bg-white'
+                              }`}
                           >
                             {v.label}
                           </button>
@@ -5564,8 +5626,8 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
                 {events.map(ev => {
                   const style = EVENT_CATEGORY_STYLE[ev.category]
                   const d = new Date(ev.event_date)
-                  const dayStr   = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
-                  const timeStr  = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                  const dayStr = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+                  const timeStr = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
                   return (
                     <div key={ev.id} className="bg-white rounded-2xl border border-slate-100 p-4 flex gap-4">
                       <div className="flex-shrink-0 text-center w-14">
@@ -5613,9 +5675,8 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
                           <button
                             key={k}
                             onClick={() => setEvCategory(k)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                              evCategory === k ? `${v.bg} ${v.text} border-current` : 'border-slate-200 text-slate-500 bg-white'
-                            }`}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${evCategory === k ? `${v.bg} ${v.text} border-current` : 'border-slate-200 text-slate-500 bg-white'
+                              }`}
                           >
                             {v.label}
                           </button>
@@ -5696,19 +5757,19 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
 }
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn]         = useState(false)
-  const [isLoading, setIsLoading]           = useState(true)
-  const [activePage, setActivePage]         = useState<NavPage>('home')
-  const [showPropose, setShowPropose]       = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [activePage, setActivePage] = useState<NavPage>('home')
+  const [showPropose, setShowPropose] = useState(false)
   const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
-  const [selectedCommune, setSelectedCommune]           = useState<Organisation | null>(null)
-  const [selectedOrg, setSelectedOrg]                   = useState<Organisation | null>(null)
-  const [selectedCommunePage, setSelectedCommunePage]   = useState<Organisation | null>(null)
-  const [communePageRole, setCommunePageRole]           = useState<CommuneRole>('member')
-  const [communeEluRole, setCommuneEluRole]             = useState<CommuneRole>('admin')
-  const [userHash, setUserHash]               = useState<string>('')
-  const [userEmail, setUserEmail]             = useState<string>('')
-  const [toasts, setToasts]                   = useState<ToastEntry[]>([])
+  const [selectedCommune, setSelectedCommune] = useState<Organisation | null>(null)
+  const [selectedOrg, setSelectedOrg] = useState<Organisation | null>(null)
+  const [selectedCommunePage, setSelectedCommunePage] = useState<Organisation | null>(null)
+  const [communePageRole, setCommunePageRole] = useState<CommuneRole>('member')
+  const [communeEluRole, setCommuneEluRole] = useState<CommuneRole>('admin')
+  const [userHash, setUserHash] = useState<string>('')
+  const [userEmail, setUserEmail] = useState<string>('')
+  const [toasts, setToasts] = useState<ToastEntry[]>([])
 
   // Auth useEffect en premier : le listener doit être actif avant getSession
   // pour ne pas manquer le SIGNED_IN déclenché par le token du magic link dans l'URL
@@ -5857,11 +5918,11 @@ export default function App() {
   }
 
   const navItems: { page: NavPage; label: string; icon: ElementType }[] = [
-    { page: 'home',    label: 'Accueil',    icon: Home },
-    { page: 'explore', label: 'Explorer',   icon: Compass },
+    { page: 'home', label: 'Accueil', icon: Home },
+    { page: 'explore', label: 'Explorer', icon: Compass },
     { page: 'profile', label: 'Mon Compte', icon: User },
-    { page: 'support', label: 'Soutenir',   icon: Heart },
-    { page: 'impact',  label: 'Impact',     icon: TrendingUp },
+    { page: 'support', label: 'Soutenir', icon: Heart },
+    { page: 'impact', label: 'Impact', icon: TrendingUp },
     { page: 'library', label: 'Bibliothèque', icon: BookOpen },
   ]
 
@@ -5967,11 +6028,10 @@ export default function App() {
               <button
                 key={page}
                 onClick={() => setActivePage(page)}
-                className={`w-full flex items-center gap-3 px-4 xl:px-5 py-3 text-sm xl:text-base text-left transition-colors ${
-                  active
-                    ? 'text-indigo-600 bg-indigo-50 font-semibold border-r-2 border-indigo-600'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 xl:px-5 py-3 text-sm xl:text-base text-left transition-colors ${active
+                  ? 'text-indigo-600 bg-indigo-50 font-semibold border-r-2 border-indigo-600'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                  }`}
               >
                 <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
                 <span>{label}</span>
@@ -6009,7 +6069,7 @@ export default function App() {
       {/* ── Content area ─────────────────────────────────────── */}
       <div className="md:pl-56 xl:pl-64 md:pt-14">
         <main className="pb-24 md:pb-10 md:max-w-[900px] xl:max-w-[1100px] md:mx-auto">
-          {activePage === 'home'    && <HomePage initialCategory={pendingCategory} userHash={userHash} />}
+          {activePage === 'home' && <HomePage initialCategory={pendingCategory} userHash={userHash} />}
           {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} onNavigateCommuneRegister={() => setActivePage('commune-register')} onNavigateAssocRegister={() => setActivePage('assoc-register')} />}
           {activePage === 'profile' && (
             <ProfilePage
@@ -6022,9 +6082,9 @@ export default function App() {
               userEmail={userEmail}
             />
           )}
-          {activePage === 'support'  && <SupportPage />}
-          {activePage === 'impact'   && <ImpactPage />}
-          {activePage === 'library'  && <LibraryPage />}
+          {activePage === 'support' && <SupportPage />}
+          {activePage === 'impact' && <ImpactPage />}
+          {activePage === 'library' && <LibraryPage />}
         </main>
       </div>
 
@@ -6046,9 +6106,8 @@ export default function App() {
               <button
                 key={page}
                 onClick={() => setActivePage(page)}
-                className={`relative flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors ${
-                  active ? 'text-indigo-600' : 'text-slate-400'
-                }`}
+                className={`relative flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors ${active ? 'text-indigo-600' : 'text-slate-400'
+                  }`}
               >
                 {active && (
                   <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-indigo-600 rounded-full" />
