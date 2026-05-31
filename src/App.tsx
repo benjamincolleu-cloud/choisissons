@@ -4415,19 +4415,39 @@ function ImpactPage() {
 }
 
 // ── Propose Modal ──────────────────────────────────────────────
-function ProposeModal({ onClose }: { onClose: () => void }) {
+function ProposeModal({ onClose, userHash }: { onClose: () => void; userHash: string }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   const categories = ['Économie', 'Environnement', 'Démocratie', 'Travail', 'Éducation', 'Santé', 'Logement', 'Justice', 'Autre']
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim() || !description.trim() || !category) return
-    setSubmitted(true)
-    setTimeout(onClose, 2500)
+    setSubmitting(true)
+
+    try {
+      const { error } = await supabase.from('proposals').insert({
+        title: title.trim(),
+        description: description.trim(),
+        category: category,
+        status: 'seedling',
+        author_hash: userHash,
+        votes_pour: 0,
+        votes_contre: 0,
+        votes_blanc: 0
+      })
+      if (error) throw error
+      setSubmitted(true)
+      setTimeout(onClose, 2500)
+    } catch (error) {
+      showToast("Une erreur est survenue lors de l'envoi de la proposition.", 'error')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (submitted) {
@@ -4505,10 +4525,10 @@ function ProposeModal({ onClose }: { onClose: () => void }) {
         <div className="mt-auto pt-2">
           <button
             type="submit"
-            disabled={!title.trim() || !description.trim() || !category}
+            disabled={!title.trim() || !description.trim() || !category || submitting}
             className="w-full bg-indigo-600 text-white rounded-xl py-4 font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 transition-all"
           >
-            Soumettre ma proposition
+            {submitting ? 'Envoi en cours...' : 'Soumettre ma proposition'}
           </button>
         </div>
       </form>
@@ -6169,7 +6189,7 @@ export default function App() {
       </nav>
 
       {/* Propose modal */}
-      {showPropose && <ProposeModal onClose={() => setShowPropose(false)} />}
+      {showPropose && <ProposeModal onClose={() => setShowPropose(false)} userHash={userHash} />}
     </div>
   )
 }
