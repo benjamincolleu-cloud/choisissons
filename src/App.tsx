@@ -4768,16 +4768,56 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
                           : <Trash2 size={13} />}
                       </button>
                     </div>
-                    {p.status === 'voting' && (
+                    {p.status === 'seedling' && (
                       <button
-                        onClick={() => handleAnchor(p.id)}
+                        onClick={() => handleStatusChange(p.id, 'review')}
                         disabled={actioningId === p.id}
-                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
                       >
                         {actioningId === p.id
-                          ? <><div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> Ancrage en cours…</>
-                          : <><Lock size={12} /> Clôturer et ancrer sur Ethereum</>}
+                          ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                          : <><Users size={12} /> → Jury</>}
                       </button>
+                    )}
+                    {p.status === 'review' && (
+                      <button
+                        onClick={() => handleStatusChange(p.id, 'voting')}
+                        disabled={actioningId === p.id}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-indigo-500 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {actioningId === p.id
+                          ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                          : <><Vote size={12} /> → Isoloir</>}
+                      </button>
+                    )}
+                    {p.status === 'voting' && (
+                      <>
+                        <div className="flex gap-2 mb-1.5">
+                          <button
+                            onClick={() => handleStatusChange(p.id, 'adopted')}
+                            disabled={actioningId === p.id}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-green-500 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            <CheckCircle size={12} /> Adopter
+                          </button>
+                          <button
+                            onClick={() => handleStatusChange(p.id, 'rejected')}
+                            disabled={actioningId === p.id}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-red-500 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            <XCircle size={12} /> Rejeter
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => handleAnchor(p.id)}
+                          disabled={actioningId === p.id}
+                          className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                        >
+                          {actioningId === p.id
+                            ? <><div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> Action en cours…</>
+                            : <><Lock size={12} /> Clôturer et ancrer sur Ethereum</>}
+                        </button>
+                      </>
                     )}
                     {p.status === 'closed' && p.blockchain_proof && (
                       <a
