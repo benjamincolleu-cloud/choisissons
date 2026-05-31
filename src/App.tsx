@@ -69,7 +69,7 @@ function mapRowToProposal(row: ProposalRow): Proposal {
     stage: (row.status as Stage) ?? 'seedling',
     votes: { pour: row.votes_pour ?? 0, contre: row.votes_contre ?? 0, blanc: row.votes_blanc ?? 0 },
     signatures: row.supports ?? 0,
-    targetSignatures: 10000,
+    targetSignatures: 10,
     arguments: [],
     author: 'Proposé par la communauté',
     date: row.created_at?.slice(0, 10) ?? '',
@@ -88,7 +88,7 @@ const PROPOSALS: Proposal[] = [
     stage: 'voting',
     votes: { pour: 0, contre: 0, blanc: 0 },
     signatures: 15000,
-    targetSignatures: 10000,
+    targetSignatures: 10,
     arguments: [
       { id: 'a1', type: 'pour', text: 'Élimine la pauvreté et donne à chacun la liberté de choisir son travail.', author: 'Marie L.', likes: 342 },
       { id: 'a2', type: 'pour', text: 'Soutient les artistes, entrepreneurs et aidants familiaux non rémunérés.', author: 'Thomas B.', likes: 289 },
@@ -107,7 +107,7 @@ const PROPOSALS: Proposal[] = [
     stage: 'review',
     votes: { pour: 0, contre: 0, blanc: 0 },
     signatures: 4200,
-    targetSignatures: 10000,
+    targetSignatures: 10,
     arguments: [
       { id: 'b1', type: 'pour', text: 'Protège la santé des enfants et des personnes vulnérables vivant près des zones traitées.', author: 'Association Santé Verte', likes: 412 },
       { id: 'b2', type: 'pour', text: 'Favorise la biodiversité urbaine et le retour des pollinisateurs.', author: 'Dr. Camille F.', likes: 267 },
@@ -125,7 +125,7 @@ const PROPOSALS: Proposal[] = [
     stage: 'seedling',
     votes: { pour: 0, contre: 0, blanc: 0 },
     signatures: 1840,
-    targetSignatures: 10000,
+    targetSignatures: 10,
     arguments: [
       { id: 'c1', type: 'pour', text: "Oblige les partis à proposer de meilleurs candidats face à un rejet officiel.", author: 'Mouvement Citoyen', likes: 534 },
       { id: 'c2', type: 'contre', text: "Le vote obligatoire est contraire à la liberté individuelle.", author: 'Collectif Libertés', likes: 201 },
@@ -142,7 +142,7 @@ const PROPOSALS: Proposal[] = [
     stage: 'adopted',
     votes: { pour: 0, contre: 0, blanc: 0 },
     signatures: 28000,
-    targetSignatures: 10000,
+    targetSignatures: 10,
     arguments: [
       { id: 'd1', type: 'pour', text: "Améliore le bien-être des agents et réduit l'absentéisme de 25% selon les expériences étrangères.", author: 'Syndicat CFDT', likes: 678 },
       { id: 'd2', type: 'contre', text: "Risque de perturber la continuité du service public pour les usagers.", author: "Association Usagers", likes: 234 },
@@ -159,7 +159,7 @@ const PROPOSALS: Proposal[] = [
     stage: 'voting',
     votes: { pour: 0, contre: 0, blanc: 0 },
     signatures: 12000,
-    targetSignatures: 10000,
+    targetSignatures: 10,
     arguments: [
       { id: 'e1', type: 'pour', text: "Lutte contre la corruption et renforce la confiance des citoyens envers leurs élus.", author: 'Transparence France', likes: 892 },
       { id: 'e2', type: 'pour', text: "Permet à chaque citoyen de comprendre où vont ses impôts locaux.", author: 'Lucas V.', likes: 445 },
@@ -1218,7 +1218,7 @@ function lawToProposal(law: ParliamentaryLaw): Proposal {
     stage: law.stage,
     votes: law.votes,
     signatures: 0,
-    targetSignatures: 10000,
+    targetSignatures: 10,
     arguments: [],
     author: 'Assemblée Nationale',
     date: law.parliamentVoteDate,
