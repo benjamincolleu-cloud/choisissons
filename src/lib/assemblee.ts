@@ -7,7 +7,7 @@ export interface ANLaw {
   title: string
   description: string
   category: string
-  stage: 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed'
+  stage: 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed' | 'archived'
   parliamentVoteDate: string
   votes: { pour: number; contre: number; blanc: number }
   tags: string[]
