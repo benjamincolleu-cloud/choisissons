@@ -3,6 +3,7 @@ import type { ElementType } from 'react'
 import { supabase } from './supabaseClient'
 import CommuneRegistration from './CommuneRegistration'
 import AssociationRegistration from './AssociationRegistration'
+import LandingPage from './components/LandingPage'
 import { getSupabaseIdentity, generateVoteProof } from './lib/identity'
 import { computeUrneRootHash, anchorHash } from './lib/blockchain'
 import { fetchDossiersLegislatifs } from './lib/assemblee'
@@ -5867,6 +5868,9 @@ function CommunePage({ commune, userRole, userHash, onBack }: {
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [showLanding, setShowLanding] = useState(() => {
+    return localStorage.getItem('has_seen_landing') !== 'true'
+  })
   const [activePage, setActivePage] = useState<NavPage>('home')
   const [showPropose, setShowPropose] = useState(false)
   const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
@@ -6034,8 +6038,23 @@ export default function App() {
     { page: 'library', label: 'Bibliothèque', icon: BookOpen },
   ]
 
-  if (isLoading) return <div className="min-h-screen bg-white" />
-  if (!isLoggedIn && activePage !== 'library') return <LoginScreen />
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!isLoggedIn && activePage !== 'library') {
+    if (showLanding) {
+      return <LandingPage onEnter={() => {
+        localStorage.setItem('has_seen_landing', 'true')
+        setShowLanding(false)
+      }} />
+    }
+    return <LoginScreen />
+  }
 
   // Full-screen dashboards — no nav bar
   if (activePage === 'elu' && selectedCommune) {
