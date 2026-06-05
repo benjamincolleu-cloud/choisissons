@@ -1164,6 +1164,7 @@ interface ParliamentaryLaw {
   number: string
   title: string
   description: string
+  resume: string        // résumé en langage clair, non officiel
   category: string
   stage: Stage
   parliamentVoteDate: string
@@ -1184,6 +1185,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     number: 'n°324',
     title: 'PLF 2026 — Projet de Loi de Finances',
     description: "Définit le budget de l'État pour 2026 : dépenses publiques, recettes fiscales et réforme de la TVA sur les produits de première nécessité. Enveloppe totale : 492 milliards d'euros.",
+    resume: '',
     category: 'Économie',
     stage: 'voting',
     parliamentVoteDate: '22 avril 2026',
@@ -1197,6 +1199,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     number: 'n°187',
     title: "Loi sur l'IA et la souveraineté numérique",
     description: "Encadre l'intelligence artificielle dans les services publics et les entreprises. Crée une autorité nationale de régulation des algorithmes et impose la transparence des modèles d'IA utilisés par l'État.",
+    resume: '',
     category: 'Numérique',
     stage: 'voting',
     parliamentVoteDate: '8 mai 2026',
@@ -1210,6 +1213,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     number: 'n°256',
     title: 'Réforme des retraites complémentaires',
     description: "Modernise le système AGIRC-ARRCO. Révise les règles de cotisation et d'acquisition de points pour les salariés du secteur privé, avec un ajustement de l'âge de liquidation à taux plein.",
+    resume: '',
     category: 'Social',
     stage: 'review',
     parliamentVoteDate: '17 juin 2026',
@@ -1384,7 +1388,12 @@ function LawCard({ law, onOpen, showAnBadge, forceClose }: {
         </div>
 
         <h3 className="font-bold text-slate-800 text-base leading-snug mb-1">{law.title}</h3>
-        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mb-3">{law.description}</p>
+        {law.resume ? (
+          <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mb-3">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1.5" title="Résumé simplifié, non officiel">En clair —</span>
+            {law.resume}
+          </p>
+        ) : null}
 
         {/* Statut Parlement + lien texte officiel */}
         <div className="flex items-center gap-2 mb-1 flex-wrap">

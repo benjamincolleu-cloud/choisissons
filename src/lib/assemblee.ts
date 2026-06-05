@@ -6,6 +6,7 @@ export interface ANLaw {
   number: string
   title: string
   description: string
+  resume: string        // résumé en langage clair, non officiel
   category: string
   stage: 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed' | 'archived' | 'upcoming'
   parliamentVoteDate: string
@@ -27,6 +28,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     number: 'PPL Constitutionnelle',
     title: 'Proposition de loi sur la souveraineté de la France',
     description: "Proposition de loi constitutionnelle déposée le 7 mai 2026. En cours : 1ère lecture à l'Assemblée nationale.",
+    resume: '',
     category: 'Institutions',
     stage: 'voting',
     parliamentVoteDate: '',
@@ -40,6 +42,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     number: 'PLF Numérique',
     title: 'Projet de loi sur la cybersécurité et la résilience numérique',
     description: "Encadrement de la cybersécurité des entreprises et collectivités. Examen prévu avant l'été 2026.",
+    resume: '',
     category: 'Numérique',
     stage: 'voting',
     parliamentVoteDate: '',
@@ -53,6 +56,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     number: 'PPL Sécurité',
     title: 'Proposition de loi sur la rétention administrative',
     description: "Renforcement des mesures de sécurité et prévention des risques d'attentat. Adoptée le 5 mai 2026.",
+    resume: '',
     category: 'Sécurité',
     stage: 'adopted',
     parliamentVoteDate: '5 mai 2026',
@@ -77,7 +81,7 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
   try {
     const { data, error } = await supabase
       .from('parliamentary_laws')
-      .select('id, number, title, description, category, stage, parliament_vote_date, votes, assemblee_pour, assemblee_contre, assemblee_abstention, assemblee_sort, tags, official_url, synced_at')
+      .select('id, number, title, description, resume, category, stage, parliament_vote_date, votes, assemblee_pour, assemblee_contre, assemblee_abstention, assemblee_sort, tags, official_url, synced_at')
       .order('synced_at', { ascending: false })
 
     if (!error && data && data.length > 0) {
@@ -88,6 +92,7 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
           number:              row.number,
           title:               row.title,
           description:         row.description,
+          resume:              row.resume ?? '',
           category:            row.category,
           stage:               row.stage as ANLaw['stage'],
           parliamentVoteDate:  row.parliament_vote_date ?? '',
