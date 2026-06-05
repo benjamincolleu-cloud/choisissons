@@ -1226,11 +1226,18 @@ const FR_MOIS: Record<string, number> = {
   juillet: 6, août: 7, septembre: 8, octobre: 9, novembre: 10, décembre: 11,
 }
 function parseFrDate(s: string): number {
+  if (!s) return Infinity
+  // Format ISO (YYYY-MM-DD) — dates telles que stockées par la synchro Supabase
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const t = new Date(s).getTime()
+    return isNaN(t) ? Infinity : t
+  }
+  // Format français (JJ MonthName AAAA) — données statiques de fallback
   const parts = s.trim().split(/\s+/)
   if (parts.length === 3) {
-    const day = parseInt(parts[0])
+    const day   = parseInt(parts[0])
     const month = FR_MOIS[parts[1].toLowerCase()]
-    const year = parseInt(parts[2])
+    const year  = parseInt(parts[2])
     if (!isNaN(day) && month !== undefined && !isNaN(year))
       return new Date(year, month, day).getTime()
   }
@@ -1257,13 +1264,15 @@ function citizenDeadlineMs(law: { parliamentVoteDate: string }): number {
 }
 
 function lawToProposal(law: ParliamentaryLaw): Proposal {
+  // Vote citoyen ouvert → 'voting' pour que AgoraModal affiche l'isoloir (quel que soit le stage AN)
+  // Vote citoyen clôturé → 'closed' pour masquer l'isoloir (AgoraModal n'affiche CTA que pour 'voting')
+  const effectiveStage: Stage = isCitizenVoteClosedFn(law) ? 'closed' : 'voting'
   return {
     id: law.id,
     title: law.title,
     description: law.description,
     category: law.category,
-    // upcoming → voting pour que AgoraModal affiche le bouton de vote
-    stage: law.stage === 'upcoming' ? 'voting' : law.stage,
+    stage: effectiveStage,
     votes: law.votes,
     signatures: 0,
     targetSignatures: 10,
