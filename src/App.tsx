@@ -11,13 +11,13 @@ import {
   Home, Compass, User, Heart, Plus, ChevronRight,
   ThumbsUp, ThumbsDown, Minus, X, CheckCircle, XCircle,
   Sprout, Users, Vote, Shield, BookOpen,
-  Lock, Star, Newspaper,
+  Lock, Star, Newspaper, Calendar,
   Building2, ArrowLeft, Info, Landmark,
   Settings, LogOut, Bell, Globe, Trash2, ExternalLink, FileText, ArrowUpDown, TrendingUp,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────
-type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed' | 'archived'
+type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed' | 'archived' | 'upcoming'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
 type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune' | 'commune-register' | 'assoc-register'
 
@@ -238,6 +238,7 @@ const STAGE_CONFIG: Record<Stage, { label: string; color: string; icon: ElementT
   rejected: { label: 'Rejetée', color: 'bg-red-100 text-red-700', icon: XCircle, description: 'Proposition rejetée' },
   closed: { label: 'Clôturé', color: 'bg-teal-100 text-teal-700', icon: Lock, description: 'Vote clôturé et ancré' },
   archived: { label: 'Archivée', color: 'bg-slate-100 text-slate-700', icon: BookOpen, description: 'Proposition archivée' },
+  upcoming: { label: 'À venir', color: 'bg-amber-100 text-amber-700', icon: Calendar, description: 'Vote à l\'Assemblée à venir' },
 }
 
 // ── Shared Components ──────────────────────────────────────────
@@ -1219,13 +1220,31 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
   },
 ]
 
+// Convertit un mois français en index 0-11 pour le tri par date
+const FR_MOIS: Record<string, number> = {
+  janvier: 0, février: 1, mars: 2, avril: 3, mai: 4, juin: 5,
+  juillet: 6, août: 7, septembre: 8, octobre: 9, novembre: 10, décembre: 11,
+}
+function parseFrDate(s: string): number {
+  const parts = s.trim().split(/\s+/)
+  if (parts.length === 3) {
+    const day = parseInt(parts[0])
+    const month = FR_MOIS[parts[1].toLowerCase()]
+    const year = parseInt(parts[2])
+    if (!isNaN(day) && month !== undefined && !isNaN(year))
+      return new Date(year, month, day).getTime()
+  }
+  return Infinity
+}
+
 function lawToProposal(law: ParliamentaryLaw): Proposal {
   return {
     id: law.id,
     title: law.title,
     description: law.description,
     category: law.category,
-    stage: law.stage,
+    // upcoming → voting pour que AgoraModal affiche le bouton de vote
+    stage: law.stage === 'upcoming' ? 'voting' : law.stage,
     votes: law.votes,
     signatures: 0,
     targetSignatures: 10,
@@ -1261,7 +1280,8 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
     const dateStr = isValidDate
       ? voteDate!.toLocaleDateString('fr-FR')
       : law.parliamentVoteDate || ''
-    if (law.stage === 'rejected') return `Rejetée le ${dateStr}`
+    if (law.stage === 'upcoming') return dateStr ? `Séance prévue le ${dateStr}` : 'Date à confirmer'
+    if (law.stage === 'rejected') return dateStr ? `Rejetée le ${dateStr}` : 'Rejetée par l\'Assemblée'
     if (parliamentHasVoted && dateStr) return `Votée le ${dateStr}`
     if (parliamentHasVoted) return 'Votée par l\'Assemblée'
     return 'En cours de débat au Parlement'
@@ -1277,7 +1297,11 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
       <div className="p-4">
         {/* Badges row */}
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          {isCitizenVoteClosed ? (
+          {law.stage === 'upcoming' ? (
+            <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2.5 py-0.5 flex items-center gap-1">
+              <Calendar size={12} /> À venir
+            </span>
+          ) : isCitizenVoteClosed ? (
             <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2.5 py-0.5 flex items-center gap-1">
               <Lock size={12} /> Vote citoyen terminé
             </span>
@@ -1629,15 +1653,49 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
               </div>
             </div>
 
-            <div className="space-y-4">
-              {laws.filter(l => l.stage !== 'archived').map(law => (
-                <LawCard
-                  key={law.id}
-                  law={law}
-                  onOpen={() => setAgoraLaw(lawToProposal(law))}
-                />
-              ))}
-            </div>
+            {/* ── Prochains votes à l'Assemblée ── */}
+            {(() => {
+              const upcomingLaws = laws
+                .filter(l => l.stage === 'upcoming')
+                .sort((a, b) => parseFrDate(a.parliamentVoteDate) - parseFrDate(b.parliamentVoteDate))
+              if (upcomingLaws.length === 0) return null
+              return (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calendar size={16} className="text-amber-600 flex-shrink-0" />
+                    <h2 className="font-bold text-slate-800 text-sm leading-tight">
+                      Prochains votes au Parlement — donnez votre avis avant les députés
+                    </h2>
+                  </div>
+                  <div className="space-y-4">
+                    {upcomingLaws.map(law => (
+                      <LawCard
+                        key={law.id}
+                        law={law}
+                        onOpen={() => setAgoraLaw(lawToProposal(law))}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* ── Lois en cours / votées ── */}
+            {(() => {
+              const currentLaws = laws.filter(l => l.stage !== 'archived' && l.stage !== 'upcoming')
+              if (currentLaws.length === 0) return null
+              return (
+                <div className="space-y-4">
+                  {currentLaws.map(law => (
+                    <LawCard
+                      key={law.id}
+                      law={law}
+                      onOpen={() => setAgoraLaw(lawToProposal(law))}
+                    />
+                  ))}
+                </div>
+              )
+            })()}
           </>
         )}
 
