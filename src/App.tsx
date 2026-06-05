@@ -1310,16 +1310,27 @@ function LawCard({ law, onOpen, showAnBadge, forceClose }: {
       ? voteDate!.toLocaleDateString('fr-FR')
       : law.parliamentVoteDate || ''
     if (law.stage === 'upcoming') return dateStr ? `Séance prévue le ${dateStr}` : 'Date à confirmer'
-    if (law.stage === 'rejected') return dateStr ? `Rejetée le ${dateStr}` : 'Rejetée par l\'Assemblée'
-    if (parliamentHasVoted && dateStr) return `Votée le ${dateStr}`
-    if (parliamentHasVoted) return 'Votée par l\'Assemblée'
+    if (law.stage === 'rejected') return dateStr ? `Rejetée par l'Assemblée le ${dateStr}` : 'Rejetée par l\'Assemblée'
+    if (parliamentHasVoted && dateStr) return `Adoptée par l'Assemblée le ${dateStr}`
+    if (parliamentHasVoted) return 'Adoptée par l\'Assemblée'
     return 'En cours de débat au Parlement'
   })()
 
+  // Libellé du lien externe selon le contexte
+  const linkLabel = (() => {
+    if (parliamentHasVoted) return 'Voir le scrutin'
+    if (law.stage === 'upcoming') return 'Voir le dossier'
+    return 'Texte officiel'
+  })()
+
   // Pourcentages pour le résultat de l'Assemblée
-  const assembleePourPct  = assembleeTotal > 0 ? Math.round((law.assembleePour / assembleeTotal) * 100) : 0
-  const assembleeContrePct = assembleeTotal > 0 ? Math.round((law.assembleeContre / assembleeTotal) * 100) : 0
-  const assembleeAbstPct  = assembleeTotal > 0 ? 100 - assembleePourPct - assembleeContrePct : 0
+  const assembleePourPct   = assembleeTotal > 0 ? Math.round((law.assembleePour    / assembleeTotal) * 100) : 0
+  const assembleeContrePct = assembleeTotal > 0 ? Math.round((law.assembleeContre  / assembleeTotal) * 100) : 0
+  const assembleeAbstPct   = assembleeTotal > 0 ? 100 - assembleePourPct - assembleeContrePct : 0
+
+  // En dessous de ce seuil : afficher les votes bruts, pas de barre ni de % (évite « 100% sur 1 voix »)
+  const MIN_VOTES_FOR_PCT = 20
+  const citizenHasEnoughVotes = citizenTotal >= MIN_VOTES_FOR_PCT
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -1347,9 +1358,13 @@ function LawCard({ law, onOpen, showAnBadge, forceClose }: {
             </span>
           )}
           {showAnBadge && (
-            parliamentHasVoted ? (
-              <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 flex items-center gap-1">
-                ✅ Déjà voté à l'Assemblée
+            law.stage === 'rejected' ? (
+              <span className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+                ❌ Rejetée par l'Assemblée
+              </span>
+            ) : parliamentHasVoted ? (
+              <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                ✅ Adoptée par l'Assemblée
               </span>
             ) : (
               <span className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">
@@ -1375,7 +1390,7 @@ function LawCard({ law, onOpen, showAnBadge, forceClose }: {
             className="ml-auto flex items-center gap-1 text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2 py-0.5 hover:bg-blue-50 transition-colors active:scale-95"
           >
             <ArrowLeft size={10} className="rotate-[135deg]" />
-            Texte officiel
+            {linkLabel}
           </a>
         </div>
         <p className="text-xs text-slate-400 mb-3">Source : Assemblée Nationale officielle</p>
@@ -1408,15 +1423,25 @@ function LawCard({ law, onOpen, showAnBadge, forceClose }: {
             <div className="w-px bg-slate-200 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">👥 Citoyens ({citizenTotal.toLocaleString('fr-FR')})</p>
-              {citizenTotal > 0 ? <VoteBar votes={law.votes} /> : <p className="text-xs text-slate-400">Aucun vote</p>}
+              {citizenTotal === 0 ? (
+                <p className="text-xs text-slate-400">Aucun vote</p>
+              ) : citizenHasEnoughVotes ? (
+                <VoteBar votes={law.votes} />
+              ) : (
+                <p className="text-xs text-slate-400">{citizenTotal} premier{citizenTotal > 1 ? 's' : ''} avis — résultats à {MIN_VOTES_FOR_PCT} votes</p>
+              )}
             </div>
           </div>
         ) : (
           // Vote citoyen OUVERT → résultat Assemblée masqué
           <>
-            {citizenTotal > 0 && <VoteBar votes={law.votes} />}
+            {citizenTotal > 0 && citizenHasEnoughVotes && <VoteBar votes={law.votes} />}
             {citizenTotal > 0 && (
-              <p className="text-xs text-slate-400 mt-1">{citizenTotal.toLocaleString('fr-FR')} avis citoyens</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {citizenHasEnoughVotes
+                  ? `${citizenTotal.toLocaleString('fr-FR')} avis citoyens`
+                  : `${citizenTotal} premier${citizenTotal > 1 ? 's' : ''} avis — résultats à ${MIN_VOTES_FOR_PCT} votes`}
+              </p>
             )}
             <p className="text-xs text-slate-400 mt-2 italic">
               🏛️ Résultat de l'Assemblée dévoilé à la clôture du vote
@@ -1752,6 +1777,17 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
                   </button>
                 ))}
               </div>
+
+              {/* Bandeau spécifique à l'onglet « À venir » */}
+              {lawTab === 'upcoming' && activeLaws.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0 mt-0.5">🗳️</span>
+                  <div>
+                    <p className="font-bold text-amber-800 text-sm mb-0.5">Donnez votre avis avant les députés</p>
+                    <p className="text-amber-700 text-xs leading-relaxed">Ces textes n'ont pas encore été votés à l'Assemblée. C'est ici que votre voix pèse le plus.</p>
+                  </div>
+                </div>
+              )}
 
               {/* Liste */}
               {activeLaws.length === 0 ? (
