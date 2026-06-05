@@ -1237,6 +1237,12 @@ function parseFrDate(s: string): number {
   return Infinity
 }
 
+// Délai citoyen = date parlement + 7 j (= quand le stage passe 'closed')
+function citizenDeadlineMs(law: { parliamentVoteDate: string }): number {
+  const t = parseFrDate(law.parliamentVoteDate)
+  return t === Infinity ? Infinity : t + 7 * 24 * 3600 * 1000
+}
+
 function lawToProposal(law: ParliamentaryLaw): Proposal {
   return {
     id: law.id,
@@ -1256,7 +1262,7 @@ function lawToProposal(law: ParliamentaryLaw): Proposal {
 }
 
 // ── Law Card ───────────────────────────────────────────────────
-function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void }) {
+function LawCard({ law, onOpen, showAnBadge }: { law: ParliamentaryLaw; onOpen: () => void; showAnBadge?: boolean }) {
   const citizenTotal = law.votes.pour + law.votes.contre + law.votes.blanc
   const assembleeTotal = law.assembleePour + law.assembleeContre + law.assembleeAbstention
 
@@ -1269,6 +1275,8 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
     deadline.setDate(deadline.getDate() + 7)
     daysLeft = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 3600 * 24))
   }
+
+  const isExemple = law.tags.some(t => t.toLowerCase() === 'exemple')
 
   // Le vote citoyen est "terminé" uniquement quand le stage passe en closed/archived
   const isCitizenVoteClosed = law.stage === 'closed' || law.stage === 'archived'
@@ -1312,6 +1320,22 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
           )}
           <span className="text-xs font-semibold text-slate-400">{law.number}</span>
           <span className="ml-auto text-xs text-slate-400">{law.category}</span>
+          {isExemple && (
+            <span className="text-xs font-medium text-purple-600 bg-purple-50 border border-purple-200 rounded-full px-2 py-0.5">
+              Exemple
+            </span>
+          )}
+          {showAnBadge && (
+            parliamentHasVoted ? (
+              <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 flex items-center gap-1">
+                ✅ Déjà voté à l'Assemblée
+              </span>
+            ) : (
+              <span className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">
+                🏛️ En discussion
+              </span>
+            )
+          )}
         </div>
 
         <h3 className="font-bold text-slate-800 text-base leading-snug mb-1">{law.title}</h3>
@@ -1415,6 +1439,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
 
   // ── Lois en cours state ────────────────────────────────────────
+  const [lawTab, setLawTab] = useState<'upcoming' | 'voter' | 'resultats'>('voter')
   const [laws, setLaws] = useState<ParliamentaryLaw[]>(PARLIAMENTARY_LAWS_INITIAL)
   const [lawVotedIds, setLawVotedIds] = useState<Set<string>>(() => {
     try {
@@ -1640,64 +1665,81 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
         </div>
 
         {/* ── TAB : Lois en cours ─────────────────────────────── */}
-        {activeTab === 'lois' && (
-          <>
-            {/* Parliament banner */}
-            <div className="bg-[#002395] rounded-2xl p-4 mb-5 text-white">
-              <div className="flex items-start gap-3">
-                <Landmark size={20} className="text-blue-200 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-sm mb-0.5">Lois parlementaires — exprimez votre avis citoyen.</p>
-                  <p className="text-blue-200 text-xs leading-relaxed">Les résultats de l'Assemblée sont révélés à la clôture du vote citoyen.</p>
+        {activeTab === 'lois' && (() => {
+          const upcomingLaws = laws
+            .filter(l => l.stage === 'upcoming')
+            .sort((a, b) => parseFrDate(a.parliamentVoteDate) - parseFrDate(b.parliamentVoteDate))
+
+          const voterLaws = laws
+            .filter(l => l.stage !== 'upcoming' && l.stage !== 'closed' && l.stage !== 'archived')
+            .sort((a, b) => citizenDeadlineMs(a) - citizenDeadlineMs(b))
+
+          const resultatsLaws = laws
+            .filter(l => l.stage === 'closed' || l.stage === 'archived')
+            .sort((a, b) => parseFrDate(b.parliamentVoteDate) - parseFrDate(a.parliamentVoteDate))
+
+          const tabs = [
+            { key: 'upcoming' as const, label: `🗓️ À venir`, count: upcomingLaws.length },
+            { key: 'voter' as const,    label: `🗳️ À voter`,  count: voterLaws.length },
+            { key: 'resultats' as const, label: `📊 Résultats`, count: resultatsLaws.length },
+          ]
+
+          const activeLaws =
+            lawTab === 'upcoming' ? upcomingLaws :
+            lawTab === 'voter'    ? voterLaws :
+                                   resultatsLaws
+
+          return (
+            <>
+              {/* Parliament banner */}
+              <div className="bg-[#002395] rounded-2xl p-4 mb-4 text-white">
+                <div className="flex items-start gap-3">
+                  <Landmark size={20} className="text-blue-200 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-sm mb-0.5">Lois parlementaires — exprimez votre avis citoyen.</p>
+                    <p className="text-blue-200 text-xs leading-relaxed">Les résultats de l'Assemblée sont révélés à la clôture du vote citoyen.</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* ── Prochains votes à l'Assemblée ── */}
-            {(() => {
-              const upcomingLaws = laws
-                .filter(l => l.stage === 'upcoming')
-                .sort((a, b) => parseFrDate(a.parliamentVoteDate) - parseFrDate(b.parliamentVoteDate))
-              if (upcomingLaws.length === 0) return null
-              return (
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calendar size={16} className="text-amber-600 flex-shrink-0" />
-                    <h2 className="font-bold text-slate-800 text-sm leading-tight">
-                      Prochains votes au Parlement — donnez votre avis avant les députés
-                    </h2>
-                  </div>
-                  <div className="space-y-4">
-                    {upcomingLaws.map(law => (
-                      <LawCard
-                        key={law.id}
-                        law={law}
-                        onOpen={() => setAgoraLaw(lawToProposal(law))}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
+              {/* Sous-onglets À venir / À voter / Résultats */}
+              <div className="flex gap-1.5 mb-4">
+                {tabs.map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setLawTab(t.key)}
+                    className={`flex-1 py-2 rounded-xl font-semibold text-xs transition-all ${
+                      lawTab === t.key
+                        ? 'bg-[#002395] text-white shadow-md shadow-blue-200'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {t.label}
+                    <span className={`ml-1 font-normal ${lawTab === t.key ? 'text-blue-200' : 'text-slate-400'}`}>
+                      ({t.count})
+                    </span>
+                  </button>
+                ))}
+              </div>
 
-            {/* ── Lois en cours / votées ── */}
-            {(() => {
-              const currentLaws = laws.filter(l => l.stage !== 'archived' && l.stage !== 'upcoming')
-              if (currentLaws.length === 0) return null
-              return (
+              {/* Liste */}
+              {activeLaws.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-8">Aucune loi dans cette catégorie.</p>
+              ) : (
                 <div className="space-y-4">
-                  {currentLaws.map(law => (
+                  {activeLaws.map(law => (
                     <LawCard
                       key={law.id}
                       law={law}
                       onOpen={() => setAgoraLaw(lawToProposal(law))}
+                      showAnBadge={lawTab === 'voter'}
                     />
                   ))}
                 </div>
-              )
-            })()}
-          </>
-        )}
+              )}
+            </>
+          )
+        })()}
 
         {/* ── TAB : Propositions citoyennes ───────────────────── */}
         {activeTab === 'propositions' && (
