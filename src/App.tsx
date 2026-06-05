@@ -2931,7 +2931,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
           <div className="space-y-2">
             {myProposals.map(p => {
               const stageEmoji: Record<Stage, string> = {
-                seedling: '🌱', review: '🔍', voting: '🗳️', adopted: '✅', rejected: '❌', closed: '⛓️', archived: '📚'
+                seedling: '🌱', review: '🔍', voting: '🗳️', adopted: '✅', rejected: '❌', closed: '⛓️', archived: '📚', upcoming: '🗓️'
               }
               const soutiens = p.supports ?? 0
               const pct = Math.min(100, (soutiens / 10) * 100)
