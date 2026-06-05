@@ -1237,10 +1237,23 @@ function parseFrDate(s: string): number {
   return Infinity
 }
 
-// Délai citoyen = date parlement + 7 j (= quand le stage passe 'closed')
+// Fenêtre de vote citoyen : 14 jours à compter de parliament_vote_date
+const CITIZEN_VOTE_DAYS = 14
+
+// Règle stable : vote citoyen fermé si stage DB closed/archived OU si 14 j depuis parliament_vote_date
+// N'utilise pas synced_at (réécrit chaque nuit par la synchro)
+function isCitizenVoteClosedFn(
+  law: { stage: string; parliamentVoteDate: string },
+  nowMs = Date.now(),
+): boolean {
+  if (law.stage === 'closed' || law.stage === 'archived') return true
+  const dateMs = parseFrDate(law.parliamentVoteDate)
+  return dateMs !== Infinity && nowMs >= dateMs + CITIZEN_VOTE_DAYS * 24 * 3600 * 1000
+}
+
 function citizenDeadlineMs(law: { parliamentVoteDate: string }): number {
   const t = parseFrDate(law.parliamentVoteDate)
-  return t === Infinity ? Infinity : t + 7 * 24 * 3600 * 1000
+  return t === Infinity ? Infinity : t + CITIZEN_VOTE_DAYS * 24 * 3600 * 1000
 }
 
 function lawToProposal(law: ParliamentaryLaw): Proposal {
@@ -1262,24 +1275,32 @@ function lawToProposal(law: ParliamentaryLaw): Proposal {
 }
 
 // ── Law Card ───────────────────────────────────────────────────
-function LawCard({ law, onOpen, showAnBadge }: { law: ParliamentaryLaw; onOpen: () => void; showAnBadge?: boolean }) {
+function LawCard({ law, onOpen, showAnBadge, forceClose }: {
+  law: ParliamentaryLaw
+  onOpen: () => void
+  showAnBadge?: boolean
+  forceClose?: boolean
+}) {
   const citizenTotal = law.votes.pour + law.votes.contre + law.votes.blanc
   const assembleeTotal = law.assembleePour + law.assembleeContre + law.assembleeAbstention
 
-  const voteDate = law.parliamentVoteDate ? new Date(law.parliamentVoteDate) : null
-  const isValidDate = voteDate !== null && !isNaN(voteDate.getTime())
+  // Calcul fiable via parseFrDate (new Date('22 avril 2026') retourne Invalid Date)
+  const parliamentMs = parseFrDate(law.parliamentVoteDate)
+  const isValidDate = parliamentMs !== Infinity
+  const voteDate = isValidDate ? new Date(parliamentMs) : null
 
+  // Jours restants dans la fenêtre de 14 j du vote citoyen
   let daysLeft = -1
   if (isValidDate) {
-    const deadline = new Date(voteDate!)
-    deadline.setDate(deadline.getDate() + 7)
-    daysLeft = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 3600 * 24))
+    daysLeft = Math.ceil(
+      (parliamentMs + CITIZEN_VOTE_DAYS * 24 * 3600 * 1000 - Date.now()) / (1000 * 3600 * 24)
+    )
   }
 
   const isExemple = law.tags.some(t => t.toLowerCase() === 'exemple')
 
-  // Le vote citoyen est "terminé" uniquement quand le stage passe en closed/archived
-  const isCitizenVoteClosed = law.stage === 'closed' || law.stage === 'archived'
+  // Règle : 14 j à compter de parliament_vote_date, ou forceClose pour les tests
+  const isCitizenVoteClosed = forceClose || isCitizenVoteClosedFn(law)
   // L'Assemblée a déjà voté si stage=adopted/rejected OU si des votes Assemblée sont renseignés
   const parliamentHasVoted =
     law.stage === 'adopted' || law.stage === 'rejected' || assembleeTotal > 0
@@ -1439,7 +1460,14 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
 
   // ── Lois en cours state ────────────────────────────────────────
-  const [lawTab, setLawTab] = useState<'upcoming' | 'voter' | 'resultats'>('voter')
+  // ?preview_results=1 dans l'URL force la clôture de toutes les lois pour tester la comparaison
+  const previewResults = useMemo(
+    () => new URLSearchParams(window.location.search).has('preview_results'),
+    [],
+  )
+  const [lawTab, setLawTab] = useState<'upcoming' | 'voter' | 'resultats'>(
+    previewResults ? 'resultats' : 'voter'
+  )
   const [laws, setLaws] = useState<ParliamentaryLaw[]>(PARLIAMENTARY_LAWS_INITIAL)
   const [lawVotedIds, setLawVotedIds] = useState<Set<string>>(() => {
     try {
@@ -1666,16 +1694,19 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
 
         {/* ── TAB : Lois en cours ─────────────────────────────── */}
         {activeTab === 'lois' && (() => {
+          // nowMs = Infinity force la clôture de toutes les lois datées (mode preview)
+          const nowMs = previewResults ? Infinity : Date.now()
+
           const upcomingLaws = laws
             .filter(l => l.stage === 'upcoming')
             .sort((a, b) => parseFrDate(a.parliamentVoteDate) - parseFrDate(b.parliamentVoteDate))
 
           const voterLaws = laws
-            .filter(l => l.stage !== 'upcoming' && l.stage !== 'closed' && l.stage !== 'archived')
+            .filter(l => l.stage !== 'upcoming' && !isCitizenVoteClosedFn(l, nowMs))
             .sort((a, b) => citizenDeadlineMs(a) - citizenDeadlineMs(b))
 
           const resultatsLaws = laws
-            .filter(l => l.stage === 'closed' || l.stage === 'archived')
+            .filter(l => l.stage !== 'upcoming' && isCitizenVoteClosedFn(l, nowMs))
             .sort((a, b) => parseFrDate(b.parliamentVoteDate) - parseFrDate(a.parliamentVoteDate))
 
           const tabs = [
@@ -1733,6 +1764,7 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
                       law={law}
                       onOpen={() => setAgoraLaw(lawToProposal(law))}
                       showAnBadge={lawTab === 'voter'}
+                      forceClose={previewResults}
                     />
                   ))}
                 </div>
