@@ -9,10 +9,16 @@ export interface ANLaw {
   category: string
   stage: 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed' | 'archived'
   parliamentVoteDate: string
-  votes: { pour: number; contre: number; blanc: number }
+  votes: { pour: number; contre: number; blanc: number }  // votes citoyens
+  assembleePour: number
+  assembleeContre: number
+  assembleeAbstention: number
+  assembleeSort: string
   tags: string[]
   officialUrl: string
 }
+
+const ZERO_ASSEMBLEE = { assembleePour: 0, assembleeContre: 0, assembleeAbstention: 0, assembleeSort: '' }
 
 // Lois réelles en cours au Parlement (mai 2026) — utilisées si Supabase est vide
 const FALLBACK_LAWS: ANLaw[] = [
@@ -25,6 +31,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     stage: 'voting',
     parliamentVoteDate: '',
     votes: { pour: 0, contre: 0, blanc: 0 },
+    ...ZERO_ASSEMBLEE,
     tags: ['constitution', 'souveraineté', 'institutions'],
     officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers?limit=25&searchText=souverainet%C3%A9+de+la+France',
   },
@@ -37,6 +44,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     stage: 'voting',
     parliamentVoteDate: '',
     votes: { pour: 0, contre: 0, blanc: 0 },
+    ...ZERO_ASSEMBLEE,
     tags: ['cybersécurité', 'numérique', 'résilience'],
     officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers?limit=25&searchText=cybers%C3%A9curit%C3%A9+r%C3%A9silience',
   },
@@ -49,6 +57,7 @@ const FALLBACK_LAWS: ANLaw[] = [
     stage: 'adopted',
     parliamentVoteDate: '5 mai 2026',
     votes: { pour: 0, contre: 0, blanc: 0 },
+    ...ZERO_ASSEMBLEE,
     tags: ['sécurité', 'rétention', 'attentat'],
     officialUrl: 'https://www.assemblee-nationale.fr/dyn/17/dossiers?limit=25&searchText=r%C3%A9tention+administrative+s%C3%A9curit%C3%A9',
   },
@@ -68,22 +77,29 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
   try {
     const { data, error } = await supabase
       .from('parliamentary_laws')
-      .select('id, number, title, description, category, stage, parliament_vote_date, votes_pour, votes_contre, votes_blanc, tags, official_url, synced_at')
+      .select('id, number, title, description, category, stage, parliament_vote_date, votes, assemblee_pour, assemblee_contre, assemblee_abstention, assemblee_sort, tags, official_url, synced_at')
       .order('synced_at', { ascending: false })
 
     if (!error && data && data.length > 0) {
-      const laws: ANLaw[] = data.map(row => ({
-        id:                 row.id,
-        number:             row.number,
-        title:              row.title,
-        description:        row.description,
-        category:           row.category,
-        stage:              row.stage as ANLaw['stage'],
-        parliamentVoteDate: row.parliament_vote_date,
-        votes:              { pour: row.votes_pour ?? 0, contre: row.votes_contre ?? 0, blanc: row.votes_blanc ?? 0 },
-        tags:               row.tags as string[],
-        officialUrl:        row.official_url,
-      }))
+      const laws: ANLaw[] = data.map(row => {
+        const v = row.votes as { pour?: number; contre?: number; blanc?: number } | null
+        return {
+          id:                  row.id,
+          number:              row.number,
+          title:               row.title,
+          description:         row.description,
+          category:            row.category,
+          stage:               row.stage as ANLaw['stage'],
+          parliamentVoteDate:  row.parliament_vote_date ?? '',
+          votes:               { pour: v?.pour ?? 0, contre: v?.contre ?? 0, blanc: v?.blanc ?? 0 },
+          assembleePour:       row.assemblee_pour ?? 0,
+          assembleeContre:     row.assemblee_contre ?? 0,
+          assembleeAbstention: row.assemblee_abstention ?? 0,
+          assembleeSort:       row.assemblee_sort ?? '',
+          tags:                (row.tags as string[]) ?? [],
+          officialUrl:         row.official_url ?? '',
+        }
+      })
 
       return laws
     }

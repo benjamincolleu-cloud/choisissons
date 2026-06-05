@@ -1166,10 +1166,16 @@ interface ParliamentaryLaw {
   category: string
   stage: Stage
   parliamentVoteDate: string
-  votes: { pour: number; contre: number; blanc: number }
+  votes: { pour: number; contre: number; blanc: number }  // votes citoyens
+  assembleePour: number
+  assembleeContre: number
+  assembleeAbstention: number
+  assembleeSort: string
   tags: string[]
   officialUrl: string
 }
+
+const ZERO_ASSEMBLEE_LAW = { assembleePour: 0, assembleeContre: 0, assembleeAbstention: 0, assembleeSort: '' }
 
 const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
   {
@@ -1181,6 +1187,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     stage: 'voting',
     parliamentVoteDate: '22 avril 2026',
     votes: { pour: 0, contre: 0, blanc: 0 },
+    ...ZERO_ASSEMBLEE_LAW,
     tags: ['budget', 'fiscalité', 'économie'],
     officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/textes/l16b0324_projet-loi',
   },
@@ -1193,6 +1200,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     stage: 'voting',
     parliamentVoteDate: '8 mai 2026',
     votes: { pour: 0, contre: 0, blanc: 0 },
+    ...ZERO_ASSEMBLEE_LAW,
     tags: ['IA', 'numérique', 'souveraineté'],
     officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/textes/l16b0187_projet-loi',
   },
@@ -1205,6 +1213,7 @@ const PARLIAMENTARY_LAWS_INITIAL: ParliamentaryLaw[] = [
     stage: 'review',
     parliamentVoteDate: '17 juin 2026',
     votes: { pour: 0, contre: 0, blanc: 0 },
+    ...ZERO_ASSEMBLEE_LAW,
     tags: ['retraites', 'social', 'travail'],
     officialUrl: 'https://www.assemblee-nationale.fr/dyn/16/dossiers/retraites_complementaires',
   },
@@ -1229,30 +1238,52 @@ function lawToProposal(law: ParliamentaryLaw): Proposal {
 
 // ── Law Card ───────────────────────────────────────────────────
 function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void }) {
-  const total = law.votes.pour + law.votes.contre + law.votes.blanc
+  const citizenTotal = law.votes.pour + law.votes.contre + law.votes.blanc
+  const assembleeTotal = law.assembleePour + law.assembleeContre + law.assembleeAbstention
 
   const voteDate = law.parliamentVoteDate ? new Date(law.parliamentVoteDate) : null
+  const isValidDate = voteDate !== null && !isNaN(voteDate.getTime())
+
   let daysLeft = -1
-  if (voteDate && !isNaN(voteDate.getTime())) {
-    const deadline = new Date(voteDate)
+  if (isValidDate) {
+    const deadline = new Date(voteDate!)
     deadline.setDate(deadline.getDate() + 7)
     daysLeft = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 3600 * 24))
   }
 
-  const isClosed = law.stage === 'closed' || law.stage === 'archived'
+  // Le vote citoyen est "terminé" uniquement quand le stage passe en closed/archived
+  const isCitizenVoteClosed = law.stage === 'closed' || law.stage === 'archived'
+  // L'Assemblée a déjà voté si stage=adopted/rejected OU si des votes Assemblée sont renseignés
+  const parliamentHasVoted =
+    law.stage === 'adopted' || law.stage === 'rejected' || assembleeTotal > 0
+
+  const parliamentLabel = (() => {
+    const dateStr = isValidDate
+      ? voteDate!.toLocaleDateString('fr-FR')
+      : law.parliamentVoteDate || ''
+    if (law.stage === 'rejected') return `Rejetée le ${dateStr}`
+    if (parliamentHasVoted && dateStr) return `Votée le ${dateStr}`
+    if (parliamentHasVoted) return 'Votée par l\'Assemblée'
+    return 'En cours de débat au Parlement'
+  })()
+
+  // Pourcentages pour le résultat de l'Assemblée
+  const assembleePourPct  = assembleeTotal > 0 ? Math.round((law.assembleePour / assembleeTotal) * 100) : 0
+  const assembleeContrePct = assembleeTotal > 0 ? Math.round((law.assembleeContre / assembleeTotal) * 100) : 0
+  const assembleeAbstPct  = assembleeTotal > 0 ? 100 - assembleePourPct - assembleeContrePct : 0
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       <div className="p-4">
         {/* Badges row */}
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          {isClosed ? (
+          {isCitizenVoteClosed ? (
             <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2.5 py-0.5 flex items-center gap-1">
-              <Lock size={12} /> Vote terminé
+              <Lock size={12} /> Vote citoyen terminé
             </span>
           ) : (
             <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5 flex items-center gap-1">
-              <Vote size={12} /> Vote ouvert {daysLeft >= 0 && `(J-${daysLeft})`}
+              <Vote size={12} /> Vote citoyen ouvert {daysLeft >= 0 && `(J-${daysLeft})`}
             </span>
           )}
           <span className="text-xs font-semibold text-slate-400">{law.number}</span>
@@ -1262,15 +1293,11 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
         <h3 className="font-bold text-slate-800 text-base leading-snug mb-1">{law.title}</h3>
         <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mb-3">{law.description}</p>
 
-        {/* Vote date + texte officiel */}
+        {/* Statut Parlement + lien texte officiel */}
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
-            <BookOpen size={12} className="text-slate-400" />
-            <span>Vote Parlement : <strong className="text-slate-700">{
-              law.parliamentVoteDate && !isNaN(voteDate?.getTime() ?? NaN)
-                ? voteDate!.toLocaleDateString('fr-FR')
-                : (law.parliamentVoteDate || 'À venir')
-            }</strong></span>
+            <Landmark size={12} className="text-slate-400" />
+            <strong className="text-slate-700">{parliamentLabel}</strong>
           </div>
           <a
             href={law.officialUrl}
@@ -1284,28 +1311,47 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
         </div>
         <p className="text-xs text-slate-400 mb-3">Source : Assemblée Nationale officielle</p>
 
-        {/* Results */}
-        {isClosed ? (
-          <div className="flex gap-4 mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <div className="flex-[0.8]">
-              <p className="text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-wider">Assemblée Nat.</p>
-              <div className="flex items-center gap-2 mt-1">
-                <Landmark size={14} className="text-slate-400" />
-                <span className="text-xs font-semibold text-slate-700">Texte voté</span>
-              </div>
+        {/* Résultats */}
+        {isCitizenVoteClosed ? (
+          // Vote citoyen TERMINÉ → comparaison des deux votes côte à côte
+          <div className="flex gap-3 mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">🏛️ Assemblée</p>
+              {assembleeTotal > 0 ? (
+                <>
+                  <div className="flex h-1.5 rounded-full overflow-hidden mb-1">
+                    <div className="bg-green-500 transition-all" style={{ width: `${assembleePourPct}%` }} />
+                    <div className="bg-slate-300 transition-all" style={{ width: `${assembleeAbstPct}%` }} />
+                    <div className="bg-red-400 transition-all" style={{ width: `${assembleeContrePct}%` }} />
+                  </div>
+                  <div className="flex flex-col gap-0.5 text-[10px]">
+                    <span className="text-green-600 font-semibold">{assembleePourPct}% pour ({law.assembleePour.toLocaleString('fr-FR')})</span>
+                    <span className="text-red-500 font-semibold">{assembleeContrePct}% contre ({law.assembleeContre.toLocaleString('fr-FR')})</span>
+                    {law.assembleeAbstention > 0 && (
+                      <span className="text-slate-400">{assembleeAbstPct}% abstention ({law.assembleeAbstention.toLocaleString('fr-FR')})</span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-slate-400">Non communiqué</p>
+              )}
             </div>
-            <div className="w-px bg-slate-200" />
-            <div className="flex-[1.2]">
-              <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Citoyens ({total.toLocaleString('fr-FR')})</p>
-              {total > 0 ? <VoteBar votes={law.votes} /> : <p className="text-xs text-slate-400 mt-2">Aucun vote</p>}
+            <div className="w-px bg-slate-200 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">👥 Citoyens ({citizenTotal.toLocaleString('fr-FR')})</p>
+              {citizenTotal > 0 ? <VoteBar votes={law.votes} /> : <p className="text-xs text-slate-400">Aucun vote</p>}
             </div>
           </div>
         ) : (
+          // Vote citoyen OUVERT → résultat Assemblée masqué
           <>
-            {total > 0 && <VoteBar votes={law.votes} />}
-            {total > 0 && (
-              <p className="text-xs text-slate-400 mt-1">{total.toLocaleString('fr-FR')} avis citoyens</p>
+            {citizenTotal > 0 && <VoteBar votes={law.votes} />}
+            {citizenTotal > 0 && (
+              <p className="text-xs text-slate-400 mt-1">{citizenTotal.toLocaleString('fr-FR')} avis citoyens</p>
             )}
+            <p className="text-xs text-slate-400 mt-2 italic">
+              🏛️ Résultat de l'Assemblée dévoilé à la clôture du vote
+            </p>
           </>
         )}
       </div>
@@ -1313,13 +1359,13 @@ function LawCard({ law, onOpen }: { law: ParliamentaryLaw; onOpen: () => void })
       <div className="px-4 pb-4">
         <button
           onClick={onOpen}
-          className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${isClosed
+          className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${isCitizenVoteClosed
             ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             : 'bg-[#002395] text-white shadow-md shadow-blue-200'
             }`}
         >
-          {isClosed ? <Info size={15} /> : <Vote size={15} />}
-          {isClosed ? "Voir les résultats" : "Lire & Voter"}
+          {isCitizenVoteClosed ? <Info size={15} /> : <Vote size={15} />}
+          {isCitizenVoteClosed ? 'Voir les résultats' : 'Lire & Voter'}
           <ChevronRight size={14} />
         </button>
       </div>
@@ -1577,8 +1623,8 @@ function HomePage({ initialCategory, userHash }: { initialCategory?: string; use
               <div className="flex items-start gap-3">
                 <Landmark size={20} className="text-blue-200 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-sm mb-0.5">Ces lois sont actuellement débattues au Parlement.</p>
-                  <p className="text-blue-200 text-xs leading-relaxed">Votre avis compte. Exprimez-vous avant le vote.</p>
+                  <p className="font-bold text-sm mb-0.5">Lois parlementaires — exprimez votre avis citoyen.</p>
+                  <p className="text-blue-200 text-xs leading-relaxed">Les résultats de l'Assemblée sont révélés à la clôture du vote citoyen.</p>
                 </div>
               </div>
             </div>
