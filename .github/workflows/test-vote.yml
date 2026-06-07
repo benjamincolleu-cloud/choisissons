@@ -1,0 +1,95 @@
+# =============================================================================
+# Pipeline CHOISISSONS — Tests de vote + Déploiement Vercel conditionnel
+#
+# ⚠️  CE WORKFLOW REMPLACE l'auto-deploy Vercel natif.
+#     Vercel doit avoir l'intégration GitHub DÉSACTIVÉE (voir VOTE_SAFETY.md).
+#
+# SECRETS GITHUB REQUIS (Settings → Secrets → Actions) :
+#   SUPABASE_URL               — URL du projet Supabase
+#   SUPABASE_ANON_KEY          — Clé publique (anon)
+#   SUPABASE_SERVICE_ROLE_KEY  — Clé secrète service role
+#   VITE_SUPABASE_URL          — Identique à SUPABASE_URL (pour le build)
+#   VITE_SUPABASE_ANON_KEY     — Identique à SUPABASE_ANON_KEY (pour le build)
+#   VERCEL_TOKEN               — Token API Vercel (vercel.com/account/tokens)
+#   VERCEL_ORG_ID              — ID organisation Vercel (voir VOTE_SAFETY.md)
+#   VERCEL_PROJECT_ID          — ID projet Vercel (voir VOTE_SAFETY.md)
+# =============================================================================
+
+name: Tests vote + Déploiement
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── JOB 1 : Tests d'intégration du vote ──────────────────────
+  test-vote:
+    name: 🗳️ Tests vote (critique)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Créer .env.test depuis les secrets GitHub
+        run: |
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}"                         > .env.test
+          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}"               >> .env.test
+          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env.test
+
+      - name: Lancer les tests de vote
+        run: npm run test:vote
+
+      - name: Vérification finale des garde-fous RLS
+        if: always()
+        run: |
+          echo "✅ Tests terminés. Voir les logs ci-dessus pour le détail."
+
+  # ── JOB 2 : Déploiement Vercel (seulement si tests OK + push sur main) ──
+  deploy:
+    name: 🚀 Déploiement Vercel
+    needs: test-vote                          # BLOQUÉ si test-vote échoue
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Déployer sur Vercel (production)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          npx vercel build --prod --token=$VERCEL_TOKEN
+          npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN

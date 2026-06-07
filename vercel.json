@@ -2,5 +2,8 @@
   "rewrites": [
     { "source": "/guide-test", "destination": "/choisissons_beta_test.html" },
     { "source": "/(.*)", "destination": "/" }
-  ]
+  ],
+  "github": {
+    "enabled": false
+  }
 }
