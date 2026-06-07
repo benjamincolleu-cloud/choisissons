@@ -25,3 +25,5 @@ dist-ssr
 
 # Fichiers de secrets pour les tests — ne jamais committer
 .env.test
+.vercel
+.env*

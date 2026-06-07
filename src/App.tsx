@@ -19,7 +19,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────
 type Stage = 'seedling' | 'review' | 'voting' | 'adopted' | 'rejected' | 'closed' | 'archived' | 'upcoming'
 type VoteChoice = 'pour' | 'contre' | 'blanc'
-type NavPage = 'home' | 'explore' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune' | 'commune-register' | 'assoc-register'
+type NavPage = 'home' | 'explore' | 'reseau' | 'profile' | 'support' | 'impact' | 'library' | 'elu' | 'org' | 'admin' | 'commune' | 'commune-register' | 'assoc-register'
 
 interface Argument {
   id: string
@@ -901,7 +901,7 @@ function AgoraModal({ proposal, onVote, onClose, hasVoted, userHash, targetType,
                     className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${argSide === side
                       ? side === 'pour' ? 'bg-green-500 text-white border-green-500' : 'bg-red-500 text-white border-red-500'
                       : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     {side === 'pour' ? '👍 Pour' : '👎 Contre'}
                   </button>
@@ -1479,9 +1479,9 @@ function parseFrDate(s: string): number {
   // Format français (JJ MonthName AAAA) — données statiques de fallback
   const parts = s.trim().split(/\s+/)
   if (parts.length === 3) {
-    const day   = parseInt(parts[0])
+    const day = parseInt(parts[0])
     const month = FR_MOIS[parts[1].toLowerCase()]
-    const year  = parseInt(parts[2])
+    const year = parseInt(parts[2])
     if (!isNaN(day) && month !== undefined && !isNaN(year))
       return new Date(year, month, day).getTime()
   }
@@ -1578,9 +1578,9 @@ function LawCard({ law, onOpen, showAnBadge, forceClose }: {
   })()
 
   // Pourcentages pour le résultat de l'Assemblée
-  const assembleePourPct   = assembleeTotal > 0 ? Math.round((law.assembleePour    / assembleeTotal) * 100) : 0
-  const assembleeContrePct = assembleeTotal > 0 ? Math.round((law.assembleeContre  / assembleeTotal) * 100) : 0
-  const assembleeAbstPct   = assembleeTotal > 0 ? 100 - assembleePourPct - assembleeContrePct : 0
+  const assembleePourPct = assembleeTotal > 0 ? Math.round((law.assembleePour / assembleeTotal) * 100) : 0
+  const assembleeContrePct = assembleeTotal > 0 ? Math.round((law.assembleeContre / assembleeTotal) * 100) : 0
+  const assembleeAbstPct = assembleeTotal > 0 ? 100 - assembleePourPct - assembleeContrePct : 0
 
   // En dessous de ce seuil : afficher les votes bruts, pas de barre ni de % (évite « 100% sur 1 voix »)
   const MIN_VOTES_FOR_PCT = 20
@@ -1995,14 +1995,14 @@ function HomePage({ initialCategory, userHash, onNavigateSupport }: { initialCat
 
           const tabs = [
             { key: 'upcoming' as const, label: `🗓️ À venir`, count: upcomingLaws.length },
-            { key: 'voter' as const,    label: `🗳️ À voter`,  count: voterLaws.length },
+            { key: 'voter' as const, label: `🗳️ À voter`, count: voterLaws.length },
             { key: 'resultats' as const, label: `📊 Résultats`, count: resultatsLaws.length },
           ]
 
           const activeLaws =
             lawTab === 'upcoming' ? upcomingLaws :
-            lawTab === 'voter'    ? voterLaws :
-                                   resultatsLaws
+              lawTab === 'voter' ? voterLaws :
+                resultatsLaws
 
           return (
             <>
@@ -2023,11 +2023,10 @@ function HomePage({ initialCategory, userHash, onNavigateSupport }: { initialCat
                   <button
                     key={t.key}
                     onClick={() => setLawTab(t.key)}
-                    className={`flex-1 py-2 rounded-xl font-semibold text-xs transition-all ${
-                      lawTab === t.key
+                    className={`flex-1 py-2 rounded-xl font-semibold text-xs transition-all ${lawTab === t.key
                         ? 'bg-[#002395] text-white shadow-md shadow-blue-200'
                         : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                    }`}
+                      }`}
                   >
                     {t.label}
                     <span className={`ml-1 font-normal ${lawTab === t.key ? 'text-blue-200' : 'text-slate-400'}`}>
@@ -3316,7 +3315,7 @@ function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, onNavigateAdmin, 
         ) : (() => {
           const byMonth = votedProposals.reduce<Record<string, typeof votedProposals>>((acc, v) => {
             const key = v.date?.slice(0, 7) ?? 'unknown'
-            ;(acc[key] = acc[key] ?? []).push(v)
+              ; (acc[key] = acc[key] ?? []).push(v)
             return acc
           }, {})
           const sortedMonths = Object.keys(byMonth).sort((a, b) => b.localeCompare(a))
@@ -5445,6 +5444,7 @@ function AdminDashboard({ onBack }: { onBack: () => void }) {
   )
 }
 
+import AmbassadorPage from './components/AmbassadorPage'
 // ── Main App ───────────────────────────────────────────────────
 // ── Bibliothèque ──────────────────────────────────────────────
 function LibraryPage() {
@@ -6585,6 +6585,7 @@ export default function App() {
   const navItems: { page: NavPage; label: string; icon: ElementType }[] = [
     { page: 'home', label: 'Accueil', icon: Home },
     { page: 'explore', label: 'Explorer', icon: Compass },
+    { page: 'reseau', label: 'Réseau', icon: Globe },
     { page: 'profile', label: 'Mon Compte', icon: User },
     { page: 'support', label: 'Soutenir', icon: Heart },
     { page: 'impact', label: 'Impact', icon: TrendingUp },
@@ -6751,6 +6752,7 @@ export default function App() {
         <main className="pb-24 md:pb-10 md:max-w-[900px] xl:max-w-[1100px] md:mx-auto">
           {activePage === 'home' && <HomePage initialCategory={pendingCategory} userHash={userHash} onNavigateSupport={() => setActivePage('support')} />}
           {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} userHash={userHash} onNavigateCommuneRegister={() => setActivePage('commune-register')} onNavigateAssocRegister={() => setActivePage('assoc-register')} />}
+          {activePage === 'reseau' && <AmbassadorPage />}
           {activePage === 'profile' && (
             <ProfilePage
               onLogout={() => { void supabase.auth.signOut(); setActivePage('home') }}
