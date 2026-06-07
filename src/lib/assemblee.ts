@@ -81,12 +81,13 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
   try {
     const { data, error } = await supabase
       .from('parliamentary_laws')
-      .select('id, number, title, description, resume, category, stage, parliament_vote_date, votes, assemblee_pour, assemblee_contre, assemblee_abstention, assemblee_sort, tags, official_url, synced_at')
+      // votes_pour/contre/blanc = colonnes entières mises à jour par deposer_bulletin
+      // Ne pas lire le champ JSONB "votes" — il n'est jamais mis à jour
+      .select('id, number, title, description, resume, category, stage, parliament_vote_date, votes_pour, votes_contre, votes_blanc, assemblee_pour, assemblee_contre, assemblee_abstention, assemblee_sort, tags, official_url, synced_at')
       .order('synced_at', { ascending: false })
 
     if (!error && data && data.length > 0) {
       const laws: ANLaw[] = data.map(row => {
-        const v = row.votes as { pour?: number; contre?: number; blanc?: number } | null
         return {
           id:                  row.id,
           number:              row.number,
@@ -96,7 +97,7 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
           category:            row.category,
           stage:               row.stage as ANLaw['stage'],
           parliamentVoteDate:  row.parliament_vote_date ?? '',
-          votes:               { pour: v?.pour ?? 0, contre: v?.contre ?? 0, blanc: v?.blanc ?? 0 },
+          votes:               { pour: row.votes_pour ?? 0, contre: row.votes_contre ?? 0, blanc: row.votes_blanc ?? 0 },
           assembleePour:       row.assemblee_pour ?? 0,
           assembleeContre:     row.assemblee_contre ?? 0,
           assembleeAbstention: row.assemblee_abstention ?? 0,
