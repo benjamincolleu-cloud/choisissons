@@ -556,7 +556,7 @@ export default function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, on
                     <p className="text-sm text-slate-400 text-center py-4">Aucun vote enregistré pour le moment.</p>
                 ) : (() => {
                     const byMonth = votedProposals.reduce<Record<string, typeof votedProposals>>((acc, v) => {
-                        const key = v.date?.slice(0, 7) ?? 'unknown'
+                        const key = v.date ? v.date.slice(0, 7) : 'unknown'
                         ;(acc[key] = acc[key] ?? []).push(v)
                         return acc
                     }, {})
