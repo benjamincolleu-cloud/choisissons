@@ -86,16 +86,37 @@ export default function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, on
                 const { data, error } = await supabase.rpc('get_my_votes', { p_user_hash: userHash })
                 if (error) throw error
                 if (!cancelled && data && (data as unknown[]).length > 0) {
-                    setVotedProposals(
-                        (data as { proposal_id: string; title: string; voted_at: string }[]).map(row => ({
-                            proposalId: String(row.proposal_id),
-                            title: row.title ?? 'Proposition inconnue',
-                            date: row.voted_at?.slice(0, 10) ?? '',
-                        }))
-                    )
+                    const rows = data as { proposal_id: string; title: string; voted_at: string }[]
+
+                    // Les votes sur lois parlementaires ont proposal_id = parliamentary_laws.number
+                    // La RPC ne joint que proposals, donc title revient null pour ces votes.
+                    const unknownIds = rows
+                        .filter(r => !r.title)
+                        .map(r => r.proposal_id)
+
+                    let lawTitles: Record<string, string> = {}
+                    if (unknownIds.length > 0) {
+                        const { data: laws } = await supabase
+                            .from('parliamentary_laws')
+                            .select('number, title')
+                            .in('number', unknownIds)
+                        for (const l of (laws ?? []) as { number: string; title: string }[]) {
+                            lawTitles[l.number] = l.title
+                        }
+                    }
+
+                    if (!cancelled) {
+                        setVotedProposals(
+                            rows.map(row => ({
+                                proposalId: String(row.proposal_id),
+                                title: row.title || lawTitles[row.proposal_id] || 'Proposition inconnue',
+                                date: row.voted_at?.slice(0, 10) ?? '',
+                            }))
+                        )
+                    }
                 }
             } catch {
-                if (!cancelled) showToast("Impossible d'enregistrer le vote. Réessayez plus tard.")
+                if (!cancelled) showToast("Impossible de charger vos votes. Réessayez plus tard.")
             } finally {
                 if (!cancelled) setLoadingVotes(false)
             }
