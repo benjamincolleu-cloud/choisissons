@@ -126,7 +126,7 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
         const [articlesRes, propsRes] = await Promise.all([
           supabase
             .from('textes_fondateurs')
-            .select('id, document_name, section_titre, article_number, original_text, source_url')
+            .select('id, document, section, article_number, original_text, source_url')
             .order('article_number'),
           supabase
             .from('proposals')
@@ -139,12 +139,12 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
         const arts = (articlesRes.data ?? []) as TexteFondateur[]
         setArticles(arts)
 
-        // Construit une map article_id → document_name pour compter les propositions par document
-        const idToDoc: Record<string, string> = {}
-        for (const a of arts) idToDoc[a.id] = a.document_name
+        // Construit une map article_id → document pour compter les propositions par document
+        const idToDoc: Record<number, string> = {}
+        for (const a of arts) idToDoc[a.id] = a.document
 
         const counts: Record<string, number> = {}
-        for (const row of (propsRes.data ?? []) as { target_article_id: string }[]) {
+        for (const row of (propsRes.data ?? []) as { target_article_id: number }[]) {
           const doc = idToDoc[row.target_article_id]
           if (doc) counts[doc] = (counts[doc] ?? 0) + 1
         }
@@ -233,7 +233,7 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
     setFormSubmitting(true)
     try {
       const { error } = await supabase.from('proposals').insert({
-        title: `Modification — ${selectedArticle.document_name}, Art. ${selectedArticle.article_number}`,
+        title: `Modification — ${selectedArticle.document}, Art. ${selectedArticle.article_number}`,
         description: formText.trim(),
         category: 'Institutions',
         status: 'seedling',
@@ -313,8 +313,8 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
   const docGroups = useMemo(() => {
     const groups: Record<string, TexteFondateur[]> = {}
     for (const art of articles) {
-      if (!groups[art.document_name]) groups[art.document_name] = []
-      groups[art.document_name].push(art)
+      if (!groups[art.document]) groups[art.document] = []
+      groups[art.document].push(art)
     }
     return groups
   }, [articles])
@@ -323,8 +323,8 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
   const sectionGroups = useMemo(() => {
     if (!selectedDoc) return {} as Record<string, TexteFondateur[]>
     const groups: Record<string, TexteFondateur[]> = {}
-    for (const art of articles.filter(a => a.document_name === selectedDoc)) {
-      const key = art.section_titre ?? '—'
+    for (const art of articles.filter(a => a.document === selectedDoc)) {
+      const key = art.section ?? '—'
       if (!groups[key]) groups[key] = []
       groups[key].push(art)
     }

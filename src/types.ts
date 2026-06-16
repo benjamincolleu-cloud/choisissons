@@ -193,9 +193,9 @@ export type LibraryEntry = {
 
 // ── Textes fondateurs ─────────────────────────────────────────
 export interface TexteFondateur {
-  id: string
-  document_name: string
-  section_titre: string | null
+  id: number
+  document: string
+  section: string | null
   article_number: string
   original_text: string
   source_url: string | null
