@@ -22,9 +22,10 @@ import ResultsModal from '../components/modals/ResultsModal'
 interface HomePageProps {
     initialCategory?: string
     onNavigateSupport?: () => void
+    onNavigateLibrary?: () => void
 }
 
-export default function HomePage({ initialCategory, onNavigateSupport }: HomePageProps) {
+export default function HomePage({ initialCategory, onNavigateSupport, onNavigateLibrary }: HomePageProps) {
     const { userHash } = useAuth()
     const [activeTab, setActiveTab] = useState<'lois' | 'propositions'>(
         initialCategory ? 'propositions' : 'lois'
@@ -222,6 +223,20 @@ export default function HomePage({ initialCategory, onNavigateSupport }: HomePag
                     <h1 className="text-2xl font-black text-slate-800">Démocratie</h1>
                     <p className="text-slate-500 text-sm">Citoyenne, citoyen — votre voix compte.</p>
                 </div>
+
+                {/* Bannière textes fondateurs */}
+                {onNavigateLibrary && (
+                    <button
+                        onClick={onNavigateLibrary}
+                        className="w-full mb-4 flex items-center gap-3 bg-gradient-to-r from-indigo-50 to-amber-50 border border-indigo-100 rounded-2xl px-4 py-3 text-left hover:shadow-sm transition-all active:scale-[.99]"
+                    >
+                        <span className="text-xl flex-shrink-0">📜</span>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-indigo-700">Nouveau — Textes fondateurs</p>
+                            <p className="text-xs text-slate-500 truncate">Proposez de moderniser la Constitution et les grandes lois →</p>
+                        </div>
+                    </button>
+                )}
 
                 {/* Main tabs */}
                 <div className="flex gap-2 mb-5">

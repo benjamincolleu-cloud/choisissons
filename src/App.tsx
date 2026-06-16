@@ -257,7 +257,7 @@ export default function App() {
       {/* ── Content area ─────────────────────────────────────── */}
       <div className="md:pl-56 xl:pl-64 md:pt-14">
         <main className="pb-24 md:pb-10 md:max-w-[900px] xl:max-w-[1100px] md:mx-auto">
-          {activePage === 'home' && <HomePage initialCategory={pendingCategory} onNavigateSupport={() => setActivePage('support')} />}
+          {activePage === 'home' && <HomePage initialCategory={pendingCategory} onNavigateSupport={() => setActivePage('support')} onNavigateLibrary={() => setActivePage('library')} />}
           {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} onNavigateCommuneRegister={() => setActivePage('commune-register')} onNavigateAssocRegister={() => setActivePage('assoc-register')} />}
           {activePage === 'reseau' && <AmbassadorPage />}
           {activePage === 'profile' && (
@@ -271,7 +271,7 @@ export default function App() {
           )}
           {activePage === 'support' && <SupportPage />}
           {activePage === 'impact' && <ImpactPage />}
-          {activePage === 'library' && <LibraryPage />}
+          {activePage === 'library' && <LibraryPage onNavigateSupport={() => setActivePage('support')} />}
         </main>
       </div>
 

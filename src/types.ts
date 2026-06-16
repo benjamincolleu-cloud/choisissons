@@ -190,3 +190,13 @@ export type LibraryEntry = {
   votes_blanc: number
   date: string
 }
+
+// ── Textes fondateurs ─────────────────────────────────────────
+export interface TexteFondateur {
+  id: number
+  document: string
+  section: string | null
+  article_number: string
+  original_text: string
+  source_url: string | null
+}
