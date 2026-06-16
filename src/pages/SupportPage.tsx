@@ -107,16 +107,22 @@ export default function SupportPage() {
         </div>
 
         {/* ── Encart gratuit ── */}
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="font-bold text-slate-700 text-sm mb-2">Gratuit — pour tous</p>
+        <div className="rounded-2xl border-2 border-green-200 bg-green-50 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-base">🗳️</span>
+            <p className="font-black text-green-800 text-sm">Gratuit — pour toujours</p>
+          </div>
+          <p className="text-sm text-green-700 leading-relaxed mb-2.5">
+            Votez librement sur toutes les lois, consultez les résultats, suivez votre commune.
+          </p>
           <ul className="space-y-1.5">
             {[
-              'Voter librement sur toutes les lois et propositions',
+              'Voter sur toutes les lois et propositions citoyennes',
               'Consulter les résultats et la comparaison Assemblée / Citoyens',
-              'Suivre votre commune',
+              'Suivre votre commune et ses actualités',
             ].map(f => (
-              <li key={f} className="flex items-start gap-2 text-sm text-slate-600">
-                <CheckCircle size={13} className="text-slate-400 flex-shrink-0 mt-0.5" />{f}
+              <li key={f} className="flex items-start gap-2 text-xs text-green-700">
+                <CheckCircle size={12} className="text-green-500 flex-shrink-0 mt-0.5" />{f}
               </li>
             ))}
           </ul>
