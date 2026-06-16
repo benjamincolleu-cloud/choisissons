@@ -108,17 +108,17 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
     if (!userHash || flaggedIds.has(argId)) return
     setFlaggedIds(prev => new Set([...prev, argId]))
     try {
-      const { data } = await supabase.rpc('flag_argument', {
-        p_argument_id: argId,
-        p_reporter_hash: userHash,
+      await supabase.from('argument_flags').insert({
+        argument_id: argId,
+        reporter_hash: userHash,
       })
-      const result = data as { flags_count?: number } | null
-      if (result && (result.flags_count ?? 0) >= 3) {
+      const { count } = await supabase
+        .from('argument_flags')
+        .select('*', { count: 'exact', head: true })
+        .eq('argument_id', argId)
+      if ((count ?? 0) >= 3) {
+        await supabase.from('arguments').update({ moderation_status: 'flagged' }).eq('id', argId)
         setDbArgs(prev => prev.filter(a => a.id !== argId))
-      } else {
-        setDbArgs(prev => prev.map(a =>
-          a.id === argId ? { ...a, flags_count: result?.flags_count ?? a.flags_count } : a
-        ))
       }
     } catch { /* silently fail */ }
   }
@@ -188,9 +188,7 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1.5" title="Résumé simplifié, non officiel">En clair —</span>
             {proposal.resume}
           </p>
-        ) : (
-          <p className="text-sm text-slate-600 leading-relaxed">{proposal.description}</p>
-        )}
+        ) : null}
         <div className="flex gap-2 mt-2 flex-wrap">
           {proposal.tags.map(tag => (
             <span key={tag} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">#{tag}</span>
@@ -199,19 +197,19 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
       </div>
 
       <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Votes citoyens</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Résultats du vote citoyen</p>
         <div className="flex gap-2">
           <div className="flex-1 text-center bg-green-50 rounded-xl py-2">
             <p className="text-lg font-black text-green-600">{pour.toLocaleString('fr-FR')}</p>
-            <p className="text-[10px] text-green-500 font-semibold uppercase">Pour</p>
+            <p className="text-[10px] text-green-500 font-semibold uppercase">Votes Pour</p>
           </div>
           <div className="flex-1 text-center bg-slate-50 rounded-xl py-2">
             <p className="text-lg font-black text-slate-400">{blanc.toLocaleString('fr-FR')}</p>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase">Blanc</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase">Votes Blanc</p>
           </div>
           <div className="flex-1 text-center bg-red-50 rounded-xl py-2">
             <p className="text-lg font-black text-red-500">{contre.toLocaleString('fr-FR')}</p>
-            <p className="text-[10px] text-red-400 font-semibold uppercase">Contre</p>
+            <p className="text-[10px] text-red-400 font-semibold uppercase">Votes Contre</p>
           </div>
         </div>
       </div>
