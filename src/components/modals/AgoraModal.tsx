@@ -12,7 +12,7 @@ interface DbArg {
   flags_count: number
 }
 
-export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHash, targetType, onNavigateSupport }: {
+export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHash, targetType, onNavigateSupport, originalText }: {
   proposal: Proposal
   onVote: () => void
   onClose: () => void
@@ -20,6 +20,7 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
   userHash?: string
   targetType?: 'law' | 'proposal'
   onNavigateSupport?: () => void
+  originalText?: string
 }) {
   const [dbArgs, setDbArgs] = useState<DbArg[]>([])
   const [loadingArgs, setLoadingArgs] = useState(true)
@@ -171,7 +172,18 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
       </div>
 
       <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex-shrink-0">
-        {proposal.resume ? (
+        {originalText ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">📋 Article en vigueur</p>
+              <p className="text-xs text-slate-600 leading-relaxed bg-slate-100 rounded-lg p-2">{originalText}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1.5">✏️ Modification proposée</p>
+              <p className="text-xs text-amber-800 leading-relaxed bg-amber-50 rounded-lg p-2">{proposal.description}</p>
+            </div>
+          </div>
+        ) : proposal.resume ? (
           <p className="text-sm text-slate-600 leading-relaxed">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1.5" title="Résumé simplifié, non officiel">En clair —</span>
             {proposal.resume}
