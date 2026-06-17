@@ -2,8 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { X, Sprout } from 'lucide-react'
-import { supabase } from '../../supabaseClient'
-import { showToast } from '../../lib/toast'
+import { supabase, supabaseUrl, supabaseAnonKey } from '../../supabaseClient'
 
 export default function ProposeModal({ onClose }: { onClose: () => void }) {
   const { userHash } = useAuth()
@@ -12,6 +11,7 @@ export default function ProposeModal({ onClose }: { onClose: () => void }) {
   const [category, setCategory] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const categories = ['Économie', 'Environnement', 'Démocratie', 'Travail', 'Éducation', 'Santé', 'Logement', 'Justice', 'Autre']
 
@@ -19,23 +19,40 @@ export default function ProposeModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     if (!title.trim() || !description.trim() || !category) return
     setSubmitting(true)
+    setSubmitError('')
 
     try {
-      const { error } = await supabase.from('proposals').insert({
-        title: title.trim(),
-        description: description.trim(),
-        category: category,
-        status: 'seedling',
-        author_hash: userHash,
-        votes_pour: 0,
-        votes_contre: 0,
-        votes_blanc: 0
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token ?? ''
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/moderate-proposal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim(),
+          author_hash: userHash,
+          proposal_type: 'citizen',
+          category,
+        }),
       })
-      if (error) throw error
-      setSubmitted(true)
-      setTimeout(onClose, 2500)
+
+      const json = await res.json() as { status?: string; message?: string; reason?: string }
+
+      if (json.status === 'submitted') {
+        setSubmitted(true)
+        setTimeout(onClose, 2500)
+      } else if (json.status === 'rejected') {
+        setSubmitError(json.reason ?? 'Proposition refusée par la modération.')
+      } else {
+        setSubmitError("Une erreur est survenue lors de l'envoi. Réessayez.")
+      }
     } catch {
-      showToast("Une erreur est survenue lors de l'envoi de la proposition.", 'error')
+      setSubmitError('Erreur de connexion, réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -114,12 +131,17 @@ export default function ProposeModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="mt-auto pt-2">
+          {submitError && (
+            <div className="mb-3 px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl">
+              <p className="text-xs text-red-700 font-medium">{submitError}</p>
+            </div>
+          )}
           <button
             type="submit"
             disabled={!title.trim() || !description.trim() || !category || submitting}
             className="w-full bg-indigo-600 text-white rounded-xl py-4 font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 transition-all"
           >
-            {submitting ? 'Envoi en cours...' : 'Soumettre ma proposition'}
+            {submitting ? 'Envoi en cours…' : 'Soumettre ma proposition'}
           </button>
         </div>
       </form>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { X, BookOpen, FileText, ChevronRight, ArrowLeft, Scroll, Scale } from 'lucide-react'
-import { supabase } from '../supabaseClient'
+import { supabase, supabaseUrl, supabaseAnonKey } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { showToast } from '../lib/toast'
 import { generateVoteProof } from '../lib/identity'
@@ -53,6 +53,7 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
   const [formText, setFormText] = useState('')
   const [formMotivation, setFormMotivation] = useState('')
   const [formSubmitting, setFormSubmitting] = useState(false)
+  const [formError, setFormError] = useState('')
 
   // Modals de vote sur propositions constitutionnelles
   const [agoraProposal, setAgoraProposal] = useState<Proposal | null>(null)
@@ -231,37 +232,50 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
   async function handleSubmitProposal() {
     if (!selectedArticle || formText.trim().length < 100 || formMotivation.trim().length < 50) return
     setFormSubmitting(true)
+    setFormError('')
     try {
-      const { error } = await supabase.from('proposals').insert({
-        title: `Modification — ${selectedArticle.document}, Art. ${selectedArticle.article_number}`,
-        description: formText.trim(),
-        category: 'Institutions',
-        status: 'seedling',
-        proposal_type: 'constitutional',
-        target_article_id: selectedArticle.id,
-        moderation_status: 'pending',
-        supports: 0,
-        votes_pour: 0,
-        votes_contre: 0,
-        votes_blanc: 0,
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token ?? ''
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/moderate-proposal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
+          title: `Modification — ${selectedArticle.document}, Art. ${selectedArticle.article_number}`,
+          description: formText.trim(),
+          author_hash: userHash,
+          proposal_type: 'constitutional',
+          target_article_id: selectedArticle.id,
+          category: 'Institutions',
+        }),
       })
-      if (error) throw error
 
-      showToast('Proposition soumise — elle sera examinée par le jury.', 'info')
-      setShowForm(false)
-      setFormText('')
-      setFormMotivation('')
+      const json = await res.json() as { status?: string; message?: string; reason?: string }
 
-      // Rafraîchit la liste
-      const { data } = await supabase
-        .from('proposals')
-        .select('id, title, description, category, status, supports, votes_pour, votes_contre, votes_blanc, tags, created_at, blockchain_proof')
-        .eq('target_article_id', selectedArticle.id)
-        .eq('proposal_type', 'constitutional')
-        .order('created_at', { ascending: false })
-      setArticleProposals((data ?? []) as ProposalRow[])
+      if (json.status === 'submitted') {
+        showToast(json.message ?? 'Proposition soumise — elle sera examinée par le jury.', 'info')
+        setShowForm(false)
+        setFormText('')
+        setFormMotivation('')
+        // Rafraîchit la liste
+        const { data } = await supabase
+          .from('proposals')
+          .select('id, title, description, category, status, supports, votes_pour, votes_contre, votes_blanc, tags, created_at, blockchain_proof')
+          .eq('target_article_id', selectedArticle.id)
+          .eq('proposal_type', 'constitutional')
+          .order('created_at', { ascending: false })
+        setArticleProposals((data ?? []) as ProposalRow[])
+      } else if (json.status === 'rejected') {
+        setFormError(json.reason ?? 'Proposition refusée par la modération.')
+      } else {
+        setFormError("Une erreur est survenue lors de l'envoi. Réessayez.")
+      }
     } catch {
-      showToast('Erreur lors de la soumission. Réessayez.')
+      setFormError('Erreur de connexion, réessayez.')
     } finally {
       setFormSubmitting(false)
     }
@@ -671,6 +685,11 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
                       </p>
                     </div>
 
+                    {formError && (
+                      <div className="px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl">
+                        <p className="text-xs text-red-700 font-medium">{formError}</p>
+                      </div>
+                    )}
                     <button
                       onClick={handleSubmitProposal}
                       disabled={formSubmitting || formText.trim().length < 100 || formMotivation.trim().length < 50}
