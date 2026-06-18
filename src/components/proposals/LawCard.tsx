@@ -9,9 +9,10 @@ interface LawCardProps {
     onOpen: () => void
     showAnBadge?: boolean
     forceClose?: boolean
+    hasVoted?: boolean
 }
 
-export default function LawCard({ law, onOpen, forceClose }: LawCardProps) {
+export default function LawCard({ law, onOpen, forceClose, hasVoted }: LawCardProps) {
     const citizenTotal = law.votes.pour + law.votes.contre + law.votes.blanc
     const assembleeTotal = law.assembleePour + law.assembleeContre + law.assembleeAbstention
 
@@ -67,6 +68,11 @@ export default function LawCard({ law, onOpen, forceClose }: LawCardProps) {
                     ) : (
                         <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5 flex items-center gap-1">
                             <Vote size={12} /> Vote citoyen ouvert {daysLeft >= 0 && `(J-${daysLeft})`}
+                        </span>
+                    )}
+                    {hasVoted && (
+                        <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                            ✓ Voté
                         </span>
                     )}
                     <span className="text-xs font-semibold text-slate-400">{law.number}</span>

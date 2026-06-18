@@ -58,6 +58,13 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
     const [votingLaw, setVotingLaw] = useState<Proposal | null>(null)
     const [votedIds, setVotedIds] = useState<Set<string>>(new Set())
 
+    // Retourne l'identifiant utilisé dans registre_scrutin pour une loi donnée
+    // (même logique que dans handleLawVoted)
+    function getLawAnId(law: ParliamentaryLaw): string {
+        const l = law as ParliamentaryLaw & { uid?: string; reference?: string }
+        return l.uid ?? l.reference ?? law.number ?? law.id
+    }
+
     useEffect(() => {
         let cancelled = false
         fetchDossiersLegislatifs().then(anLaws => {
@@ -101,6 +108,37 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         })
         return () => { cancelled = true }
     }, [userHash])
+
+    // Vérifie dans registre_scrutin quelles lois l'utilisateur a déjà votées
+    useEffect(() => {
+        if (!userHash || laws.length === 0) return
+        let cancelled = false
+
+        // Map anId → law.id pour le recroisement après la query
+        const anIdToLawId: Record<string, string> = {}
+        for (const law of laws) {
+            anIdToLawId[getLawAnId(law)] = law.id
+        }
+        const anIds = Object.keys(anIdToLawId)
+
+        supabase
+            .from('registre_scrutin')
+            .select('proposal_id')
+            .in('proposal_id', anIds)
+            .eq('user_hash', userHash)
+            .then(({ data }) => {
+                if (cancelled || !data || data.length === 0) return
+                const voted = (data as { proposal_id: string }[])
+                    .map(r => anIdToLawId[r.proposal_id])
+                    .filter(Boolean)
+                if (voted.length > 0) {
+                    setLawVotedIds(prev => new Set([...prev, ...voted]))
+                }
+            })
+
+        return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userHash, laws.length])
 
     const filtered = useMemo(() =>
         proposals.filter(p => {
@@ -338,6 +376,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                             onOpen={() => setAgoraLaw(lawToProposal(law))}
                                             showAnBadge={lawTab === 'voter'}
                                             forceClose={previewResults}
+                                            hasVoted={lawVotedIds.has(law.id)}
                                         />
                                     ))}
                                 </div>
