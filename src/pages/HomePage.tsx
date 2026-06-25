@@ -39,6 +39,8 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
     const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
     const [votedChoices, setVotedChoices] = useState<Record<string, VoteChoice>>({})
     const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
+    const [resultsProposalTitle, setResultsProposalTitle] = useState<string>('')
+    const [resultsLaw, setResultsLaw] = useState<{ id: string; title: string } | null>(null)
 
     const previewResults = useMemo(
         () => new URLSearchParams(window.location.search).has('preview_results'),
@@ -148,7 +150,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         }),
         [proposals, activeStage, activeCategory])
 
-    const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) => {
+    const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice, proposalTitle?: string) => {
         const isRevote = oldChoice !== undefined
         setVotingProposal(null)
         setAgoraProposal(null)
@@ -183,6 +185,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
             if (isRevote) {
                 showToast('Vote mis à jour ✓', 'info')
             } else {
+                setResultsProposalTitle(proposalTitle ?? '')
                 setResultsProposalId(proposalId)
             }
         } catch {
@@ -238,7 +241,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                 return
             }
 
-            showToast('Votre avis a bien été enregistré ✓', 'info')
+            setResultsLaw({ id: lawId, title: targetLaw?.title ?? '' })
 
         } catch {
             showToast('Erreur de connexion. Vote sauvegardé localement.', 'warning')
@@ -478,7 +481,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
             {votingProposal && (
                 <VotingBooth
                     proposal={votingProposal}
-                    onVoted={(choice) => handleVoted(votingProposal.id, choice, votedChoices[votingProposal.id])}
+                    onVoted={(choice) => handleVoted(votingProposal.id, choice, votedChoices[votingProposal.id], votingProposal.title)}
                     onClose={() => setVotingProposal(null)}
                 />
             )}
@@ -505,7 +508,16 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
             {resultsProposalId && (
                 <ResultsModal
                     proposalId={resultsProposalId}
+                    title={resultsProposalTitle}
                     onClose={() => setResultsProposalId(null)}
+                />
+            )}
+            {resultsLaw && (
+                <ResultsModal
+                    proposalId={resultsLaw.id}
+                    targetType="law"
+                    title={resultsLaw.title}
+                    onClose={() => setResultsLaw(null)}
                 />
             )}
         </>
