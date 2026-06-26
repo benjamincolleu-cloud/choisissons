@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, CheckCircle, Share2, Copy, Camera } from 'lucide-react'
+import { X, CheckCircle, Share2, Copy, Camera, Download, ArrowLeft } from 'lucide-react'
 import { toPng } from 'html-to-image'
 import { supabase } from '../../supabaseClient'
 
@@ -10,7 +10,9 @@ interface AssembleeData {
   sort: string
 }
 
-// ── Carte visuelle hors-écran (format story 9:16) ─────────────
+// ── Carte hors-écran pour la capture PNG ──────────────────────
+// Rendue dans un wrapper 0×0 overflow:visible pour que html-to-image
+// puisse la lire. Uniquement styles inline + polices système.
 function ShareCard({
   cardRef,
   title,
@@ -40,123 +42,128 @@ function ShareCard({
   aAbstPct: number
   sortLabel: string
 }) {
-  const s = {
-    card: {
-      position: 'fixed' as const,
-      left: '-9999px',
-      top: '0',
-      width: '540px',
-      height: '960px',
-      background: 'linear-gradient(150deg, #1e1b4b 0%, #312e81 45%, #4338ca 100%)',
-      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-      display: 'flex',
-      flexDirection: 'column' as const,
-      padding: '40px 32px 36px',
-      color: 'white',
-      overflow: 'hidden',
-      boxSizing: 'border-box' as const,
-    },
+  const adoptColor = sortLabel.toLowerCase().includes('adopt') ? '#86efac' : '#fca5a5'
+  const adoptBg   = sortLabel.toLowerCase().includes('adopt') ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'
+
+  function Bar(label: string, pct: number, barColor: string, numColor: string, count: number) {
+    return (
+      <div key={label} style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '5px' }}>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: numColor }}>{label}</span>
+          <span style={{ fontSize: '50px', fontWeight: 900, color: numColor, lineHeight: 1 }}>{pct}%</span>
+        </div>
+        <div style={{ height: '7px', background: 'rgba(255,255,255,0.12)', borderRadius: '4px', overflow: 'hidden' }}>
+          <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: '4px' }} />
+        </div>
+        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '3px' }}>
+          {count.toLocaleString('fr-FR')} vote{count !== 1 ? 's' : ''}
+        </p>
+      </div>
+    )
   }
 
-  const barRow = (label: string, pct: number, barColor: string, numColor: string, count: number) => (
-    <div style={{ marginBottom: '18px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-        <span style={{ fontSize: '15px', fontWeight: 700, color: numColor, opacity: 0.9 }}>{label}</span>
-        <span style={{ fontSize: '52px', fontWeight: 900, color: numColor, lineHeight: 1 }}>{pct}%</span>
-      </div>
-      <div style={{ height: '8px', background: 'rgba(255,255,255,0.12)', borderRadius: '4px', overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: '4px' }} />
-      </div>
-      <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>
-        {count.toLocaleString('fr-FR')} vote{count !== 1 ? 's' : ''}
-      </p>
-    </div>
-  )
-
-  const adoptColor = sortLabel.toLowerCase().includes('adopt') ? '#86efac' : '#fca5a5'
-  const adoptBg = sortLabel.toLowerCase().includes('adopt') ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'
-
   return (
-    <div ref={cardRef} style={s.card}>
-      {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
-        <div style={{ width: '42px', height: '42px', background: 'rgba(255,255,255,0.15)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>
-          🗳️
-        </div>
-        <span style={{ fontSize: '22px', fontWeight: 900, letterSpacing: '-0.5px' }}>CHOISISSONS</span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'rgba(255,255,255,0.45)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-          {targetType === 'law' ? 'Loi' : 'Proposition'}
-        </span>
-      </div>
-
-      {/* Titre */}
-      <div style={{ marginBottom: '24px' }}>
-        <p style={{
-          fontSize: title && title.length > 80 ? '18px' : '22px',
-          fontWeight: 800,
-          lineHeight: 1.3,
+    // Wrapper 0×0 : ne perturbe pas la mise en page
+    <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'visible', pointerEvents: 'none', top: 0, left: 0 }}>
+      <div
+        ref={cardRef}
+        style={{
+          position: 'absolute',
+          left: '-99999px',
+          top: 0,
+          width: '540px',
+          height: '960px',
+          background: 'linear-gradient(150deg,#1e1b4b 0%,#312e81 45%,#4338ca 100%)',
+          fontFamily: 'system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '40px 32px 36px',
           color: 'white',
-          display: '-webkit-box',
-          WebkitLineClamp: 4,
-          WebkitBoxOrient: 'vertical' as const,
           overflow: 'hidden',
-        }}>
-          {title ?? 'Proposition citoyenne'}
-        </p>
-      </div>
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* En-tête */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          {/* Cercle coloré à la place d'une image externe */}
+          <div style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.15)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '18px', height: '18px', background: '#a5b4fc', borderRadius: '3px' }} />
+          </div>
+          <span style={{ fontSize: '22px', fontWeight: 900, letterSpacing: '-0.5px' }}>CHOISISSONS</span>
+          <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'rgba(255,255,255,0.45)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+            {targetType === 'law' ? 'Loi' : 'Proposition'}
+          </span>
+        </div>
 
-      {/* Résultats citoyens */}
-      <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: '18px', padding: '22px', marginBottom: '14px', border: '1px solid rgba(255,255,255,0.1)' }}>
-        <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '16px' }}>
-          👥 Avis citoyens
-        </p>
-        {barRow('Pour', pourPct, '#22c55e', '#4ade80', votes.pour)}
-        {barRow('Contre', contrePct, '#ef4444', '#f87171', votes.contre)}
-        {barRow('Vote blanc', blancPct, 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.55)', votes.blanc)}
-        <div style={{ marginTop: '12px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
-          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)' }}>
-            <strong style={{ color: 'white', fontWeight: 800 }}>{total.toLocaleString('fr-FR')}</strong>{' '}
-            vote{total !== 1 ? 's' : ''} exprimé{total !== 1 ? 's' : ''}
+        {/* Titre */}
+        <div style={{ marginBottom: '22px' }}>
+          <p style={{
+            fontSize: (title ?? '').length > 80 ? '17px' : '21px',
+            fontWeight: 800,
+            lineHeight: 1.3,
+            color: 'white',
+            display: '-webkit-box',
+            WebkitLineClamp: 4,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}>
+            {title ?? 'Proposition citoyenne'}
           </p>
         </div>
-      </div>
 
-      {/* Bloc Assemblée */}
-      {assemblee && (
-        <div style={{ background: 'rgba(0,35,149,0.35)', borderRadius: '16px', padding: '18px', marginBottom: '14px', border: '1px solid rgba(255,255,255,0.12)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-              🏛️ Et les députés ?
+        {/* Résultats citoyens */}
+        <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: '18px', padding: '20px', marginBottom: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '14px' }}>
+            Avis citoyens
+          </p>
+          {Bar('Pour',       pourPct,  '#22c55e', '#4ade80', votes.pour)}
+          {Bar('Contre',     contrePct,'#ef4444', '#f87171', votes.contre)}
+          {Bar('Vote blanc', blancPct, 'rgba(255,255,255,0.28)', 'rgba(255,255,255,0.55)', votes.blanc)}
+          <div style={{ marginTop: '10px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
+              <strong style={{ color: 'white', fontWeight: 800 }}>{total.toLocaleString('fr-FR')}</strong>
+              {' '}vote{total !== 1 ? 's' : ''} exprimé{total !== 1 ? 's' : ''}
             </p>
-            {sortLabel && (
-              <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '99px', background: adoptBg, color: adoptColor }}>
-                {sortLabel}
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
-            {[
-              { label: 'Pour', pct: aPourPct, color: '#4ade80' },
-              { label: 'Contre', pct: aContrePct, color: '#f87171' },
-              { label: 'Abst.', pct: aAbstPct, color: 'rgba(255,255,255,0.35)' },
-            ].map(({ label, pct, color }) => (
-              <div key={label} style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: '10px', padding: '10px 4px' }}>
-                <p style={{ fontSize: '30px', fontWeight: 900, color, lineHeight: 1 }}>{pct}%</p>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', marginTop: '3px' }}>{label}</p>
-              </div>
-            ))}
           </div>
         </div>
-      )}
 
-      <div style={{ flex: 1 }} />
+        {/* Bloc Assemblée (conditionnel) */}
+        {assemblee && (
+          <div style={{ background: 'rgba(0,35,149,0.35)', borderRadius: '14px', padding: '16px', marginBottom: '12px', border: '1px solid rgba(255,255,255,0.12)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Et les deputes ?
+              </p>
+              {sortLabel && (
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 9px', borderRadius: '99px', background: adoptBg, color: adoptColor }}>
+                  {sortLabel}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
+              {[
+                { label: 'Pour',   pct: aPourPct,   color: '#4ade80' },
+                { label: 'Contre', pct: aContrePct, color: '#f87171' },
+                { label: 'Abst.',  pct: aAbstPct,   color: 'rgba(255,255,255,0.35)' },
+              ].map(({ label, pct, color }) => (
+                <div key={label} style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: '10px', padding: '10px 4px' }}>
+                  <p style={{ fontSize: '28px', fontWeight: 900, color, lineHeight: 1 }}>{pct}%</p>
+                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', marginTop: '3px' }}>{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* CTA footer */}
-      <div style={{ background: 'rgba(255,255,255,0.09)', borderRadius: '16px', padding: '20px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.14)' }}>
-        <p style={{ fontSize: '15px', fontWeight: 800, marginBottom: '4px', letterSpacing: '-0.3px' }}>
-          Votez sur <span style={{ color: '#a5b4fc' }}>choisissons.fr</span>
-        </p>
-        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>La démocratie participative</p>
+        <div style={{ flex: 1 }} />
+
+        {/* CTA footer */}
+        <div style={{ background: 'rgba(255,255,255,0.09)', borderRadius: '14px', padding: '18px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.13)' }}>
+          <p style={{ fontSize: '15px', fontWeight: 800, marginBottom: '3px', letterSpacing: '-0.3px' }}>
+            Votez sur <span style={{ color: '#a5b4fc' }}>choisissons.fr</span>
+          </p>
+          <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>La democratie participative</p>
+        </div>
       </div>
     </div>
   )
@@ -176,15 +183,18 @@ export default function ResultsModal({
   title?: string
   alreadyVoted?: boolean
 }) {
-  const [votes, setVotes] = useState({ pour: 0, contre: 0, blanc: 0 })
+  const [votes, setVotes]       = useState({ pour: 0, contre: 0, blanc: 0 })
   const [assemblee, setAssemblee] = useState<AssembleeData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]   = useState(true)
   const [animated, setAnimated] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied]     = useState(false)
   const [sharingImage, setSharingImage] = useState(false)
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
+  const [imageError, setImageError]     = useState<string | null>(null)
 
   const cardRef = useRef<HTMLDivElement>(null)
 
+  // ── Chargement des résultats ──────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function fetchResults() {
@@ -192,39 +202,39 @@ export default function ResultsModal({
         if (targetType === 'law') {
           const { data, error } = await supabase
             .from('parliamentary_laws')
-            .select('votes_pour, votes_contre, votes_blanc, assemblee_pour, assemblee_contre, assemblee_abstention, assemblee_sort')
+            .select('votes_pour,votes_contre,votes_blanc,assemblee_pour,assemblee_contre,assemblee_abstention,assemblee_sort')
             .eq('id', proposalId)
             .single()
           if (error) throw error
           if (!cancelled && data) {
             setVotes({
-              pour: (data.votes_pour as number) ?? 0,
+              pour:   (data.votes_pour  as number) ?? 0,
               contre: (data.votes_contre as number) ?? 0,
-              blanc: (data.votes_blanc as number) ?? 0,
+              blanc:  (data.votes_blanc  as number) ?? 0,
             })
-            const ap = (data.assemblee_pour as number) ?? 0
-            const ac = (data.assemblee_contre as number) ?? 0
+            const ap = (data.assemblee_pour    as number) ?? 0
+            const ac = (data.assemblee_contre  as number) ?? 0
             if (ap + ac > 0) {
               setAssemblee({
-                pour: ap,
-                contre: ac,
+                pour:       ap,
+                contre:     ac,
                 abstention: (data.assemblee_abstention as number) ?? 0,
-                sort: (data.assemblee_sort as string) ?? '',
+                sort:       (data.assemblee_sort as string) ?? '',
               })
             }
           }
         } else {
           const { data, error } = await supabase
             .from('proposals')
-            .select('votes_pour, votes_contre, votes_blanc')
+            .select('votes_pour,votes_contre,votes_blanc')
             .eq('id', proposalId)
             .single()
           if (error) throw error
           if (!cancelled && data) {
             setVotes({
-              pour: (data as { votes_pour: number }).votes_pour ?? 0,
+              pour:   (data as { votes_pour: number }).votes_pour   ?? 0,
               contre: (data as { votes_contre: number }).votes_contre ?? 0,
-              blanc: (data as { votes_blanc: number }).votes_blanc ?? 0,
+              blanc:  (data as { votes_blanc: number }).votes_blanc   ?? 0,
             })
           }
         }
@@ -239,8 +249,9 @@ export default function ResultsModal({
     return () => { cancelled = true }
   }, [proposalId, targetType])
 
+  // ── Partage lien ──────────────────────────────────────────
   async function handleShare() {
-    const url = window.location.origin
+    const url  = window.location.origin
     const text = title
       ? `J'ai voté sur « ${title} ». Et toi, tu en penses quoi ?`
       : 'Je participe à CHOISISSONS — la démocratie citoyenne.'
@@ -255,67 +266,65 @@ export default function ResultsModal({
     }
   }
 
+  // ── Génération et partage de l'image ──────────────────────
   async function handleShareImage() {
     if (!cardRef.current) return
     setSharingImage(true)
+    setImageError(null)
     try {
-      const dataUrl = await toPng(cardRef.current, {
-        pixelRatio: 2,
-        cacheBust: true,
-        // évite de charger des polices externes — on utilise system-ui
-        fontEmbedCSS: '',
-      })
+      // Attend que les polices système soient disponibles
+      await document.fonts.ready
 
-      const res = await fetch(dataUrl)
+      const opts = { pixelRatio: 2, cacheBust: true, skipFonts: true } as const
+
+      // Correctif Safari : le 1er appel renvoie parfois une image vide
+      await toPng(cardRef.current, opts).catch(() => {/* ignoré intentionnellement */})
+
+      // 2e appel : résultat fiable sur tous les navigateurs
+      const dataUrl = await toPng(cardRef.current, opts)
+
+      const res  = await fetch(dataUrl)
       const blob = await res.blob()
       const file = new File([blob], 'choisissons-vote.png', { type: 'image/png' })
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        // Partage natif (iOS / Android)
+        // Mobile → partage natif avec l'image
         await navigator.share({
           files: [file],
           title: 'CHOISISSONS — Mon vote',
           text: title ? `J'ai voté sur « ${title} »` : 'Je participe à CHOISISSONS',
         })
       } else {
-        // Téléchargement desktop — blob URL plus fiable qu'un dataURL de 1+ Mo
-        const objectUrl = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.style.display = 'none'
-        link.href = objectUrl
-        link.download = 'choisissons-vote.png'
-        document.body.appendChild(link)
-        link.click()
-        setTimeout(() => {
-          document.body.removeChild(link)
-          URL.revokeObjectURL(objectUrl)
-        }, 150)
+        // Desktop → affiche l'image dans le modal
+        setImageDataUrl(dataUrl)
       }
     } catch (err) {
       console.error('[ShareImage] html-to-image error:', err)
+      setImageError('La génération de l\'image a échoué. Réessayez ou faites une capture d\'écran.')
     } finally {
       setSharingImage(false)
     }
   }
 
-  const total = votes.pour + votes.contre + votes.blanc
-  const pourPct = total > 0 ? Math.round((votes.pour / total) * 100) : 0
+  // ── Calculs ───────────────────────────────────────────────
+  const total     = votes.pour + votes.contre + votes.blanc
+  const pourPct   = total > 0 ? Math.round((votes.pour   / total) * 100) : 0
   const contrePct = total > 0 ? Math.round((votes.contre / total) * 100) : 0
-  const blancPct = 100 - pourPct - contrePct
+  const blancPct  = 100 - pourPct - contrePct
 
   const citizenBars = [
-    { label: 'Pour', pct: pourPct, color: 'bg-green-500', textColor: 'text-green-600', count: votes.pour },
-    { label: 'Contre', pct: contrePct, color: 'bg-red-400', textColor: 'text-red-500', count: votes.contre },
-    { label: 'Vote blanc', pct: blancPct, color: 'bg-slate-300', textColor: 'text-slate-500', count: votes.blanc },
+    { label: 'Pour',       pct: pourPct,   color: 'bg-green-500', textColor: 'text-green-600', count: votes.pour   },
+    { label: 'Contre',     pct: contrePct, color: 'bg-red-400',   textColor: 'text-red-500',   count: votes.contre },
+    { label: 'Vote blanc', pct: blancPct,  color: 'bg-slate-300', textColor: 'text-slate-500', count: votes.blanc  },
   ]
 
-  const aTotal = assemblee ? assemblee.pour + assemblee.contre + assemblee.abstention : 0
-  const aPourPct = aTotal > 0 ? Math.round((assemblee!.pour / aTotal) * 100) : 0
-  const aContrePct = aTotal > 0 ? Math.round((assemblee!.contre / aTotal) * 100) : 0
-  const aAbstPct = aTotal > 0 ? 100 - aPourPct - aContrePct : 0
+  const aTotal    = assemblee ? assemblee.pour + assemblee.contre + assemblee.abstention : 0
+  const aPourPct  = aTotal > 0 ? Math.round((assemblee!.pour   / aTotal) * 100) : 0
+  const aContrePct= aTotal > 0 ? Math.round((assemblee!.contre / aTotal) * 100) : 0
+  const aAbstPct  = aTotal > 0 ? 100 - aPourPct - aContrePct : 0
 
   const sortLabel = assemblee?.sort ?? ''
-  const sortCls = sortLabel.toLowerCase().includes('adopt')
+  const sortCls   = sortLabel.toLowerCase().includes('adopt')
     ? 'bg-green-100 text-green-700'
     : sortLabel.toLowerCase().includes('rejet')
       ? 'bg-red-100 text-red-600'
@@ -323,7 +332,7 @@ export default function ResultsModal({
 
   return (
     <>
-      {/* Carte hors-écran pour la capture PNG */}
+      {/* Carte hors-écran (toujours dans le DOM pour html-to-image) */}
       <ShareCard
         cardRef={cardRef}
         title={title}
@@ -362,7 +371,7 @@ export default function ResultsModal({
             </button>
           </div>
 
-          {/* Bannière « déjà voté » */}
+          {/* Bannière déjà voté */}
           {alreadyVoted && (
             <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2 flex-shrink-0">
               <CheckCircle size={15} className="text-amber-500 flex-shrink-0" />
@@ -370,108 +379,158 @@ export default function ResultsModal({
             </div>
           )}
 
-          {/* Body scrollable */}
-          <div className="overflow-y-auto flex-1 p-5 space-y-5">
-            {loading ? (
-              <div className="space-y-5">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="space-y-2 animate-pulse">
-                    <div className="flex justify-between">
-                      <div className="h-3 bg-slate-100 rounded w-16" />
-                      <div className="h-3 bg-slate-100 rounded w-8" />
-                    </div>
-                    <div className="h-3 bg-slate-100 rounded-full" />
-                  </div>
-                ))}
+          {/* Erreur génération image */}
+          {imageError && (
+            <div className="mx-5 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex-shrink-0">
+              <p className="text-xs text-red-600 font-medium">{imageError}</p>
+            </div>
+          )}
+
+          {/* Corps scrollable */}
+          <div className="overflow-y-auto flex-1">
+
+            {imageDataUrl ? (
+              /* ── Prévisualisation de l'image générée ── */
+              <div className="p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-slate-700">Votre carte</p>
+                  <button
+                    onClick={() => setImageDataUrl(null)}
+                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    <ArrowLeft size={12} />
+                    Retour aux résultats
+                  </button>
+                </div>
+
+                <img
+                  src={imageDataUrl}
+                  alt="Carte de résultat CHOISISSONS"
+                  className="w-full rounded-2xl shadow-md"
+                  style={{ maxHeight: '55vh', objectFit: 'contain' }}
+                />
+
+                <a
+                  href={imageDataUrl}
+                  download="choisissons-vote.png"
+                  className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+                >
+                  <Download size={15} />
+                  Télécharger l'image
+                </a>
+
+                <p className="text-xs text-slate-400 text-center">
+                  Sur Mac : clic droit sur l'image → « Enregistrer l'image sous… »
+                </p>
               </div>
+
             ) : (
-              <>
-                {/* ── Résultats citoyens ───────────────────────── */}
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
-                    {targetType === 'law' ? '👥 Avis citoyens CHOISISSONS' : '👥 Résultats citoyens'}
-                  </p>
-                  <div className="space-y-3">
-                    {citizenBars.map(({ label, pct, color, textColor, count }) => (
-                      <div key={label}>
-                        <div className="flex items-baseline justify-between mb-1.5">
-                          <span className={`text-sm font-semibold ${textColor}`}>{label}</span>
-                          <span className={`text-xl font-black ${textColor}`}>{pct}%</span>
+              /* ── Résultats ── */
+              <div className="p-5 space-y-5">
+                {loading ? (
+                  <div className="space-y-5">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="space-y-2 animate-pulse">
+                        <div className="flex justify-between">
+                          <div className="h-3 bg-slate-100 rounded w-16" />
+                          <div className="h-3 bg-slate-100 rounded w-8"  />
                         </div>
-                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
-                            style={{ width: animated ? `${pct}%` : '0%' }}
-                          />
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {count.toLocaleString('fr-FR')} vote{count !== 1 ? 's' : ''}
-                        </p>
+                        <div className="h-3 bg-slate-100 rounded-full" />
                       </div>
                     ))}
                   </div>
-                  <div className="pt-3 mt-1 border-t border-slate-100 text-center">
-                    <p className="text-sm text-slate-500">
-                      <span className="font-bold text-slate-700">{total.toLocaleString('fr-FR')}</span>{' '}
-                      vote{total !== 1 ? 's' : ''} exprimé{total !== 1 ? 's' : ''} au total
-                    </p>
-                  </div>
-                </div>
-
-                {/* ── Et les députés ? ─────────────────────────── */}
-                {assemblee && (
-                  <div className="bg-blue-50 border border-[#002395]/10 rounded-2xl p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-[10px] font-bold text-[#002395] uppercase tracking-wider">
-                        🏛️ Et les députés ?
+                ) : (
+                  <>
+                    {/* Résultats citoyens */}
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+                        {targetType === 'law' ? '👥 Avis citoyens CHOISISSONS' : '👥 Résultats citoyens'}
                       </p>
-                      {sortLabel && (
-                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${sortCls}`}>
-                          {sortLabel}
-                        </span>
-                      )}
+                      <div className="space-y-3">
+                        {citizenBars.map(({ label, pct, color, textColor, count }) => (
+                          <div key={label}>
+                            <div className="flex items-baseline justify-between mb-1.5">
+                              <span className={`text-sm font-semibold ${textColor}`}>{label}</span>
+                              <span className={`text-xl font-black ${textColor}`}>{pct}%</span>
+                            </div>
+                            <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
+                                style={{ width: animated ? `${pct}%` : '0%' }}
+                              />
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {count.toLocaleString('fr-FR')} vote{count !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-3 mt-1 border-t border-slate-100 text-center">
+                        <p className="text-sm text-slate-500">
+                          <span className="font-bold text-slate-700">{total.toLocaleString('fr-FR')}</span>{' '}
+                          vote{total !== 1 ? 's' : ''} exprimé{total !== 1 ? 's' : ''} au total
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      {[
-                        { label: 'Pour', pct: aPourPct, color: 'bg-green-500', count: assemblee.pour },
-                        { label: 'Contre', pct: aContrePct, color: 'bg-red-400', count: assemblee.contre },
-                        { label: 'Abstention', pct: aAbstPct, color: 'bg-slate-300', count: assemblee.abstention },
-                      ].map(({ label, pct, color, count }) => (
-                        <div key={label}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-slate-600 font-medium">{label}</span>
-                            <span className="text-xs font-bold text-slate-700">
-                              {pct}%{' '}
-                              <span className="font-normal text-slate-400">({count.toLocaleString('fr-FR')})</span>
+
+                    {/* Bloc Assemblée */}
+                    {assemblee && (
+                      <div className="bg-blue-50 border border-[#002395]/10 rounded-2xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-[10px] font-bold text-[#002395] uppercase tracking-wider">
+                            🏛️ Et les députés ?
+                          </p>
+                          {sortLabel && (
+                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${sortCls}`}>
+                              {sortLabel}
                             </span>
-                          </div>
-                          <div className="h-2 bg-white border border-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
-                              style={{ width: animated ? `${pct}%` : '0%' }}
-                            />
-                          </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-slate-400 mt-3 text-right">
-                      {aTotal.toLocaleString('fr-FR')} député{aTotal !== 1 ? 's' : ''} ont voté
-                    </p>
-                  </div>
+                        <div className="space-y-2">
+                          {[
+                            { label: 'Pour',       pct: aPourPct,   color: 'bg-green-500', count: assemblee.pour       },
+                            { label: 'Contre',     pct: aContrePct, color: 'bg-red-400',   count: assemblee.contre     },
+                            { label: 'Abstention', pct: aAbstPct,   color: 'bg-slate-300', count: assemblee.abstention },
+                          ].map(({ label, pct, color, count }) => (
+                            <div key={label}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-slate-600 font-medium">{label}</span>
+                                <span className="text-xs font-bold text-slate-700">
+                                  {pct}%{' '}
+                                  <span className="font-normal text-slate-400">({count.toLocaleString('fr-FR')})</span>
+                                </span>
+                              </div>
+                              <div className="h-2 bg-white border border-slate-100 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
+                                  style={{ width: animated ? `${pct}%` : '0%' }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-3 text-right">
+                          {aTotal.toLocaleString('fr-FR')} député{aTotal !== 1 ? 's' : ''} ont voté
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
+              </div>
             )}
           </div>
 
           {/* Footer */}
           <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex-shrink-0 space-y-2">
-            {/* Boutons de partage côte à côte */}
             <div className="flex gap-2">
               <button
                 onClick={handleShare}
                 className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-slate-200"
               >
-                {copied ? <><Copy size={15} />Copié !</> : <><Share2 size={15} />Lien</>}
+                {copied
+                  ? <><Copy size={15} />Copié !</>
+                  : <><Share2 size={15} />Lien</>
+                }
               </button>
               <button
                 onClick={handleShareImage}
@@ -484,7 +543,6 @@ export default function ResultsModal({
                 }
               </button>
             </div>
-
             <button
               onClick={onClose}
               className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm active:scale-95 transition-all"
