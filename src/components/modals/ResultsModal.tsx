@@ -14,11 +14,13 @@ export default function ResultsModal({
   onClose,
   targetType = 'proposal',
   title,
+  alreadyVoted = false,
 }: {
   proposalId: string
   onClose: () => void
   targetType?: 'law' | 'proposal'
   title?: string
+  alreadyVoted?: boolean
 }) {
   const [votes, setVotes] = useState({ pour: 0, contre: 0, blanc: 0 })
   const [assemblee, setAssemblee] = useState<AssembleeData | null>(null)
@@ -130,7 +132,9 @@ export default function ResultsModal({
               <CheckCircle size={18} className="text-green-500" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800">Votre vote a été enregistré</p>
+              <p className="text-sm font-bold text-slate-800">
+                {alreadyVoted ? 'Vote déjà enregistré' : 'Votre vote a été enregistré'}
+              </p>
               <p className="text-xs text-slate-400">Résultats en temps réel</p>
             </div>
           </div>
@@ -138,6 +142,14 @@ export default function ResultsModal({
             <X size={16} className="text-slate-500" />
           </button>
         </div>
+
+        {/* Bannière « déjà voté » */}
+        {alreadyVoted && (
+          <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2 flex-shrink-0">
+            <CheckCircle size={15} className="text-amber-500 flex-shrink-0" />
+            <p className="text-sm text-amber-700 font-medium">Vous avez déjà voté sur ce sujet.</p>
+          </div>
+        )}
 
         {/* Body scrollable */}
         <div className="overflow-y-auto flex-1 p-5 space-y-5">

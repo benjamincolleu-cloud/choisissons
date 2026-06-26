@@ -32,6 +32,7 @@ export default function ExplorePage({ onNavigateCommuneRegister, onNavigateAssoc
   const [votingProposal, setVotingProposal] = useState<Proposal | null>(null)
   const [votedChoices, setVotedChoices] = useState<Record<string, VoteChoice>>({})
   const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
+  const [resultsAlreadyVoted, setResultsAlreadyVoted] = useState(false)
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set())
 
   const [orgSubTab, setOrgSubTab] = useState<'commune' | 'ong' | 'media'>('commune')
@@ -121,40 +122,35 @@ export default function ExplorePage({ onNavigateCommuneRegister, onNavigateAssoc
     }
   }
 
-  async function handleVoted(proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice) {
-    const isRevote = oldChoice !== undefined
+  async function handleVoted(proposalId: string, choice: VoteChoice) {
     setVotingProposal(null)
     setAgoraProposal(null)
 
-    const choiceMap: Record<VoteChoice, string> = {
-      pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
-    }
+    const choiceMap: Record<VoteChoice, string> = { pour: 'YES', contre: 'NO', blanc: 'ABSTAIN' }
     const mappedChoice = choiceMap[choice]
 
     setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
-    setAllProposals(prev => prev.map(p => {
-      if (p.id !== proposalId) return p
-      const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
-      if (oldChoice) newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
-      return { ...p, votes: newVotes }
-    }))
+    setAllProposals(prev => prev.map(p =>
+      p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: p.votes[choice] + 1 } }
+    ))
 
     const proof = await generateVoteProof(proposalId, mappedChoice)
-    const voteParams = {
-      p_proposal_id: String(proposalId),
-      p_user_hash: userHash,
-      p_choice: mappedChoice,
-      p_proof_hash: proof,
-    }
-
     try {
-      const { error } = await supabase.rpc('deposer_bulletin', voteParams)
+      const { data, error } = await supabase.rpc('deposer_bulletin', {
+        p_proposal_id: String(proposalId),
+        p_user_hash: userHash,
+        p_choice: mappedChoice,
+        p_proof_hash: proof,
+      })
       if (error) throw new Error('DB Error')
-      if (isRevote) {
-        showToast('Vote mis à jour ✓', 'info')
-      } else {
-        setResultsProposalId(proposalId)
+      const result = (data ?? {}) as { success?: boolean; already_voted?: boolean }
+      if (result.already_voted) {
+        setAllProposals(prev => prev.map(p =>
+          p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: Math.max(0, p.votes[choice] - 1) } }
+        ))
       }
+      setResultsAlreadyVoted(result.already_voted ?? false)
+      setResultsProposalId(proposalId)
     } catch {
       const pending = loadPendingVotes()
       if (!pending.some(v => v.proposalId === proposalId)) {
@@ -312,7 +308,6 @@ export default function ExplorePage({ onNavigateCommuneRegister, onNavigateAssoc
                   onOpen={() => setAgoraProposal(proposal)}
                   currentVote={votedChoices[proposal.id]}
                   hasAlreadyVoted={votedIds.has(proposal.id)}
-                  onRevote={() => setVotingProposal(proposal)}
                 />
               ))}
             </div>
@@ -323,7 +318,7 @@ export default function ExplorePage({ onNavigateCommuneRegister, onNavigateAssoc
               proposal={agoraProposal}
               onVote={() => setVotingProposal(agoraProposal)}
               onClose={() => setAgoraProposal(null)}
-              hasVoted={agoraProposal.id in votedChoices}
+              hasVoted={votedIds.has(agoraProposal.id) || agoraProposal.id in votedChoices}
               userHash={userHash}
               targetType="proposal"
             />
@@ -331,14 +326,15 @@ export default function ExplorePage({ onNavigateCommuneRegister, onNavigateAssoc
           {votingProposal && (
             <VotingBooth
               proposal={votingProposal}
-              onVoted={(choice) => handleVoted(votingProposal.id, choice, votedChoices[votingProposal.id])}
+              onVoted={(choice) => handleVoted(votingProposal.id, choice)}
               onClose={() => setVotingProposal(null)}
             />
           )}
           {resultsProposalId && (
             <ResultsModal
               proposalId={resultsProposalId}
-              onClose={() => setResultsProposalId(null)}
+              alreadyVoted={resultsAlreadyVoted}
+              onClose={() => { setResultsProposalId(null); setResultsAlreadyVoted(false) }}
             />
           )}
         </>
