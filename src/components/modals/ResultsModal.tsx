@@ -259,28 +259,41 @@ export default function ResultsModal({
     if (!cardRef.current) return
     setSharingImage(true)
     try {
-      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, cacheBust: true })
+      const dataUrl = await toPng(cardRef.current, {
+        pixelRatio: 2,
+        cacheBust: true,
+        // évite de charger des polices externes — on utilise system-ui
+        fontEmbedCSS: '',
+      })
 
       const res = await fetch(dataUrl)
       const blob = await res.blob()
       const file = new File([blob], 'choisissons-vote.png', { type: 'image/png' })
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Partage natif (iOS / Android)
         await navigator.share({
           files: [file],
           title: 'CHOISISSONS — Mon vote',
           text: title ? `J'ai voté sur « ${title} »` : 'Je participe à CHOISISSONS',
         })
       } else {
-        // Fallback : téléchargement
+        // Téléchargement desktop — blob URL plus fiable qu'un dataURL de 1+ Mo
+        const objectUrl = URL.createObjectURL(blob)
         const link = document.createElement('a')
+        link.style.display = 'none'
+        link.href = objectUrl
         link.download = 'choisissons-vote.png'
-        link.href = dataUrl
         document.body.appendChild(link)
         link.click()
-        document.body.removeChild(link)
+        setTimeout(() => {
+          document.body.removeChild(link)
+          URL.revokeObjectURL(objectUrl)
+        }, 150)
       }
-    } catch { /* dismissed ou erreur silencieuse */ } finally {
+    } catch (err) {
+      console.error('[ShareImage] html-to-image error:', err)
+    } finally {
       setSharingImage(false)
     }
   }

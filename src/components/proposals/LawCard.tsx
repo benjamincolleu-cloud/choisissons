@@ -2,17 +2,18 @@ import type { ParliamentaryLaw } from '../../types'
 import { parseFrDate, isCitizenVoteClosedFn } from '../../lib/utils'
 import { CITIZEN_VOTE_DAYS, MIN_VOTES_FOR_PCT } from '../../lib/constants'
 import VoteBar from '../common/VoteBar'
-import { Calendar, Lock, Vote, Landmark, ArrowLeft, Info, ChevronRight } from 'lucide-react'
+import { Calendar, Lock, Vote, Landmark, ArrowLeft, Info, ChevronRight, CheckCircle } from 'lucide-react'
 
 interface LawCardProps {
     law: ParliamentaryLaw
     onOpen: () => void
+    onShowResult?: () => void
     showAnBadge?: boolean
     forceClose?: boolean
     hasVoted?: boolean
 }
 
-export default function LawCard({ law, onOpen, forceClose, hasVoted }: LawCardProps) {
+export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVoted }: LawCardProps) {
     const citizenTotal = law.votes.pour + law.votes.contre + law.votes.blanc
     const assembleeTotal = law.assembleePour + law.assembleeContre + law.assembleeAbstention
 
@@ -157,17 +158,28 @@ export default function LawCard({ law, onOpen, forceClose, hasVoted }: LawCardPr
             </div>
 
             <div className="px-4 pb-4">
-                <button
-                    onClick={onOpen}
-                    className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${isCitizenVoteClosed
-                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        : 'bg-[#002395] text-white shadow-md shadow-blue-200'
-                        }`}
-                >
-                    {isCitizenVoteClosed ? <Info size={15} /> : <Vote size={15} />}
-                    {isCitizenVoteClosed ? 'Voir les résultats' : 'Lire & Voter'}
-                    <ChevronRight size={14} />
-                </button>
+                {hasVoted && !isCitizenVoteClosed && onShowResult ? (
+                    <button
+                        onClick={onShowResult}
+                        className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 bg-green-50 text-green-700 border border-green-200 hover:bg-green-100"
+                    >
+                        <CheckCircle size={15} />
+                        Voir le résultat
+                        <ChevronRight size={14} />
+                    </button>
+                ) : (
+                    <button
+                        onClick={onOpen}
+                        className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${isCitizenVoteClosed
+                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                            : 'bg-[#002395] text-white shadow-md shadow-blue-200'
+                            }`}
+                    >
+                        {isCitizenVoteClosed ? <Info size={15} /> : <Vote size={15} />}
+                        {isCitizenVoteClosed ? 'Voir les résultats' : 'Lire & Voter'}
+                        <ChevronRight size={14} />
+                    </button>
+                )}
             </div>
         </div>
     )

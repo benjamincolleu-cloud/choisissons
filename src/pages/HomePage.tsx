@@ -384,6 +384,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                             key={law.id}
                                             law={law}
                                             onOpen={() => setAgoraLaw(lawToProposal(law))}
+                                            onShowResult={() => setResultsLaw({ id: law.id, title: law.title })}
                                             showAnBadge={lawTab === 'voter'}
                                             forceClose={previewResults}
                                             hasVoted={lawVotedIds.has(law.id)}
