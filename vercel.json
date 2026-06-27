@@ -1,9 +1,8 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/guide-test", "destination": "/choisissons_beta_test.html" },
     { "source": "/(.*)", "destination": "/" }
-  ],
-  "github": {
-    "enabled": false
-  }
+  ]
 }
