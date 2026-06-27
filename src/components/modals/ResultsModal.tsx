@@ -10,11 +10,11 @@ interface AssembleeData {
   sort: string
 }
 
-// ────────────────────────────────────────────────────────────────
-// Carte visuelle format story (1080×1920).
-// Positionnée hors-écran via position:fixed — pas de display:none
-// ni de visibility:hidden, sinon html-to-image capture du blanc/noir.
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Carte visuelle 1080×1920 (format story 9:16).
+// Elle est rendue VISIBLE dans le modal dans un conteneur scalé —
+// un élément réellement affiché se capture de façon fiable.
+// ─────────────────────────────────────────────────────────────────────────────
 function ShareCard({
   cardRef,
   title,
@@ -45,7 +45,7 @@ function ShareCard({
   sortLabel: string
 }) {
   const adoptColor = sortLabel.toLowerCase().includes('adopt') ? '#86efac' : '#fca5a5'
-  const adoptBg   = sortLabel.toLowerCase().includes('adopt')
+  const adoptBg = sortLabel.toLowerCase().includes('adopt')
     ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'
 
   function Bar(label: string, pct: number, barColor: string, numColor: string, count: number) {
@@ -69,17 +69,11 @@ function ShareCard({
     <div
       ref={cardRef}
       style={{
-        // Hors-écran mais rendu réellement dans le DOM
-        position: 'fixed',
-        left: '-99999px',
-        top: '0',
-        // Dimensions explicites 1080×1920 (format story 9:16)
+        // Dimensions réelles pour la capture — le parent applique le scale visuel
         width: '1080px',
         height: '1920px',
-        // Fond opaque — sans ça, la transparence devient noire sur Facebook/Instagram
         backgroundColor: '#1e1b4b',
         background: 'linear-gradient(150deg,#1e1b4b 0%,#312e81 45%,#4338ca 100%)',
-        // Polices système uniquement — pas d'import externe qui bloquerait Safari
         fontFamily: 'system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif',
         display: 'flex',
         flexDirection: 'column',
@@ -89,7 +83,7 @@ function ShareCard({
         boxSizing: 'border-box',
       }}
     >
-      {/* Logo — carré coloré sans image externe pour éviter le canvas "tainted" */}
+      {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '56px' }}>
         <div style={{
           width: '80px', height: '80px',
@@ -132,9 +126,9 @@ function ShareCard({
         <p style={{ fontSize: '20px', fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '32px' }}>
           Avis citoyens
         </p>
-        {Bar('Pour',       pourPct,   '#22c55e', '#4ade80', votes.pour)}
-        {Bar('Contre',     contrePct, '#ef4444', '#f87171', votes.contre)}
-        {Bar('Vote blanc', blancPct,  'rgba(255,255,255,0.28)', 'rgba(255,255,255,0.55)', votes.blanc)}
+        {Bar('Pour', pourPct, '#22c55e', '#4ade80', votes.pour)}
+        {Bar('Contre', contrePct, '#ef4444', '#f87171', votes.contre)}
+        {Bar('Vote blanc', blancPct, 'rgba(255,255,255,0.28)', 'rgba(255,255,255,0.55)', votes.blanc)}
         <div style={{ marginTop: '20px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
           <p style={{ fontSize: '24px', color: 'rgba(255,255,255,0.5)' }}>
             <strong style={{ color: 'white', fontWeight: 800 }}>{total.toLocaleString('fr-FR')}</strong>
@@ -164,9 +158,9 @@ function ShareCard({
           </div>
           <div style={{ display: 'flex', gap: '16px', textAlign: 'center' }}>
             {[
-              { label: 'Pour',   pct: aPourPct,   color: '#4ade80' },
+              { label: 'Pour', pct: aPourPct, color: '#4ade80' },
               { label: 'Contre', pct: aContrePct, color: '#f87171' },
-              { label: 'Abst.',  pct: aAbstPct,   color: 'rgba(255,255,255,0.35)' },
+              { label: 'Abst.', pct: aAbstPct, color: 'rgba(255,255,255,0.35)' },
             ].map(({ label, pct, color }) => (
               <div key={label} style={{ flex: 1, background: 'rgba(255,255,255,0.07)', borderRadius: '20px', padding: '20px 8px' }}>
                 <p style={{ fontSize: '56px', fontWeight: 900, color, lineHeight: 1 }}>{pct}%</p>
@@ -197,7 +191,7 @@ function ShareCard({
   )
 }
 
-// ── Modal principal ────────────────────────────────────────────
+// ── Modal principal ────────────────────────────────────────────────────────────
 export default function ResultsModal({
   proposalId,
   onClose,
@@ -211,18 +205,36 @@ export default function ResultsModal({
   title?: string
   alreadyVoted?: boolean
 }) {
-  const [votes, setVotes]           = useState({ pour: 0, contre: 0, blanc: 0 })
-  const [assemblee, setAssemblee]   = useState<AssembleeData | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [animated, setAnimated]     = useState(false)
-  const [copied, setCopied]         = useState(false)
+  const [votes, setVotes] = useState({ pour: 0, contre: 0, blanc: 0 })
+  const [assemblee, setAssemblee] = useState<AssembleeData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [animated, setAnimated] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [sharingImage, setSharingImage] = useState(false)
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
-  const [imageError, setImageError]     = useState<string | null>(null)
+  const [imageError, setImageError] = useState<string | null>(null)
 
+  // Ref sur la carte 1080×1920 (élément capturé)
   const cardRef = useRef<HTMLDivElement>(null)
+  // Ref sur le conteneur qui clipe et scale la carte visuellement
+  const previewContainerRef = useRef<HTMLDivElement>(null)
+  const [previewScale, setPreviewScale] = useState(0.33)
 
-  // ── Chargement des résultats ────────────────────────────────
+  // ── Calcul dynamique du scale de l'aperçu ────────────────────
+  useEffect(() => {
+    const el = previewContainerRef.current
+    if (!el) return
+    const update = () => {
+      const w = el.offsetWidth
+      if (w > 0) setPreviewScale(w / 1080)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // ── Chargement des résultats ──────────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function fetchResults() {
@@ -236,18 +248,18 @@ export default function ResultsModal({
           if (error) throw error
           if (!cancelled && data) {
             setVotes({
-              pour:   (data.votes_pour   as number) ?? 0,
+              pour: (data.votes_pour as number) ?? 0,
               contre: (data.votes_contre as number) ?? 0,
-              blanc:  (data.votes_blanc  as number) ?? 0,
+              blanc: (data.votes_blanc as number) ?? 0,
             })
-            const ap = (data.assemblee_pour   as number) ?? 0
+            const ap = (data.assemblee_pour as number) ?? 0
             const ac = (data.assemblee_contre as number) ?? 0
             if (ap + ac > 0) {
               setAssemblee({
-                pour:       ap,
-                contre:     ac,
+                pour: ap,
+                contre: ac,
                 abstention: (data.assemblee_abstention as number) ?? 0,
-                sort:       (data.assemblee_sort as string) ?? '',
+                sort: (data.assemblee_sort as string) ?? '',
               })
             }
           }
@@ -260,9 +272,9 @@ export default function ResultsModal({
           if (error) throw error
           if (!cancelled && data) {
             setVotes({
-              pour:   (data as { votes_pour: number }).votes_pour   ?? 0,
+              pour: (data as { votes_pour: number }).votes_pour ?? 0,
               contre: (data as { votes_contre: number }).votes_contre ?? 0,
-              blanc:  (data as { votes_blanc: number }).votes_blanc   ?? 0,
+              blanc: (data as { votes_blanc: number }).votes_blanc ?? 0,
             })
           }
         }
@@ -277,9 +289,9 @@ export default function ResultsModal({
     return () => { cancelled = true }
   }, [proposalId, targetType])
 
-  // ── Partage lien ──────────────────────────────────────────
+  // ── Partage lien ──────────────────────────────────────────────
   async function handleShare() {
-    const url  = window.location.origin
+    const url = window.location.origin
     const text = title
       ? `J'ai voté sur « ${title} ». Et toi, tu en penses quoi ?`
       : 'Je participe à CHOISISSONS — la démocratie citoyenne.'
@@ -294,7 +306,7 @@ export default function ResultsModal({
     }
   }
 
-  // ── Génération et partage de l'image ─────────────────────
+  // ── Génération et partage de l'image ─────────────────────────
   async function handleShareImage() {
     const el = cardRef.current
     if (!el) return
@@ -302,22 +314,33 @@ export default function ResultsModal({
     setImageError(null)
 
     try {
-      // Attend les polices système
       await document.fonts.ready
 
+      // Diagnostic : vérification des valeurs avant capture
+      console.log('[ShareImage] valeurs capturées :', {
+        title,
+        votes,
+        total,
+        pourPct,
+        contrePct,
+        blancPct,
+        assemblee,
+        sortLabel,
+      })
+
       const opts = {
-        width:           1080,
-        height:          1920,
-        backgroundColor: '#1e1b4b', // fond opaque — évite le noir sur Facebook
-        cacheBust:       true,
-        pixelRatio:      2,
-        skipFonts:       true,      // pas de polices externes à charger
+        width: 1080,
+        height: 1920,
+        backgroundColor: '#1e1b4b',
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: true,
       } as const
 
-      // Correctif Safari : 1er appel souvent vide — ignoré intentionnellement
-      await toPng(el, opts).catch(() => {})
+      // Premier appel ignoré (correctif Safari — résultat souvent vide)
+      await toPng(el, opts).catch(() => { })
 
-      // 2e appel : résultat fiable sur tous navigateurs
+      // Deuxième appel : résultat fiable sur tous navigateurs
       const dataUrl = await toPng(el, opts)
 
       // Diagnostic : dimensions réelles de l'image générée
@@ -330,275 +353,304 @@ export default function ResultsModal({
       }
       img.src = dataUrl
 
-      const res  = await fetch(dataUrl)
-      const blob = await res.blob()
-      const file = new File([blob], 'choisissons-vote.png', { type: 'image/png' })
+      // Mobile = écran tactile ; Desktop = souris/trackpad
+      const isMobile = window.matchMedia('(pointer:coarse)').matches
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        // Mobile : partage natif avec l'image
-        await navigator.share({
-          files: [file],
-          title: 'CHOISISSONS — Mon vote',
-          text: title ? `J'ai voté sur « ${title} »` : 'Je participe à CHOISISSONS',
-        })
-      } else {
-        // Desktop : affiche le PNG dans le modal pour téléchargement
-        setImageDataUrl(dataUrl)
+      if (isMobile && navigator.canShare) {
+        const res = await fetch(dataUrl)
+        const blob = await res.blob()
+        const file = new File([blob], 'choisissons-vote.png', { type: 'image/png' })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: 'CHOISISSONS — Mon vote',
+            text: title ? `J'ai voté sur « ${title} »` : 'Je participe à CHOISISSONS',
+          })
+          return
+        }
       }
+
+      // Desktop (ou mobile sans partage natif de fichiers) :
+      // affiche l'image dans le modal pour téléchargement
+      setImageDataUrl(dataUrl)
     } catch (err) {
-      console.error('[ShareImage] erreur html-to-image :', err)
-      setImageError('La génération de l\'image a échoué. Réessayez ou faites une capture d\'écran.')
+      console.error('[ShareImage] erreur :', err)
+      setImageError("La génération de l'image a échoué. Réessayez ou faites une capture d'écran.")
     } finally {
       setSharingImage(false)
     }
   }
 
-  // ── Calculs ──────────────────────────────────────────────
-  const total      = votes.pour + votes.contre + votes.blanc
-  const pourPct    = total > 0 ? Math.round((votes.pour   / total) * 100) : 0
-  const contrePct  = total > 0 ? Math.round((votes.contre / total) * 100) : 0
-  const blancPct   = 100 - pourPct - contrePct
+  // ── Calculs ───────────────────────────────────────────────────
+  const total = votes.pour + votes.contre + votes.blanc
+  const pourPct = total > 0 ? Math.round((votes.pour / total) * 100) : 0
+  const contrePct = total > 0 ? Math.round((votes.contre / total) * 100) : 0
+  const blancPct = 100 - pourPct - contrePct
 
   const citizenBars = [
-    { label: 'Pour',       pct: pourPct,   color: 'bg-green-500', textColor: 'text-green-600', count: votes.pour   },
-    { label: 'Contre',     pct: contrePct, color: 'bg-red-400',   textColor: 'text-red-500',   count: votes.contre },
-    { label: 'Vote blanc', pct: blancPct,  color: 'bg-slate-300', textColor: 'text-slate-500', count: votes.blanc  },
+    { label: 'Pour', pct: pourPct, color: 'bg-green-500', textColor: 'text-green-600', count: votes.pour },
+    { label: 'Contre', pct: contrePct, color: 'bg-red-400', textColor: 'text-red-500', count: votes.contre },
+    { label: 'Vote blanc', pct: blancPct, color: 'bg-slate-300', textColor: 'text-slate-500', count: votes.blanc },
   ]
 
-  const aTotal     = assemblee ? assemblee.pour + assemblee.contre + assemblee.abstention : 0
-  const aPourPct   = aTotal > 0 ? Math.round((assemblee!.pour   / aTotal) * 100) : 0
+  const aTotal = assemblee ? assemblee.pour + assemblee.contre + assemblee.abstention : 0
+  const aPourPct = aTotal > 0 ? Math.round((assemblee!.pour / aTotal) * 100) : 0
   const aContrePct = aTotal > 0 ? Math.round((assemblee!.contre / aTotal) * 100) : 0
-  const aAbstPct   = aTotal > 0 ? 100 - aPourPct - aContrePct : 0
+  const aAbstPct = aTotal > 0 ? 100 - aPourPct - aContrePct : 0
 
   const sortLabel = assemblee?.sort ?? ''
-  const sortCls   = sortLabel.toLowerCase().includes('adopt')
+  const sortCls = sortLabel.toLowerCase().includes('adopt')
     ? 'bg-green-100 text-green-700'
     : sortLabel.toLowerCase().includes('rejet')
       ? 'bg-red-100 text-red-600'
       : 'bg-slate-100 text-slate-600'
 
+  // Hauteur visuelle du conteneur d'aperçu en px
+  const previewHeight = Math.round(1920 * previewScale)
+
   return (
-    <>
-      {/* Carte hors-écran — toujours dans le DOM */}
-      <ShareCard
-        cardRef={cardRef}
-        title={title}
-        targetType={targetType}
-        votes={votes}
-        total={total}
-        pourPct={pourPct}
-        contrePct={contrePct}
-        blancPct={blancPct}
-        assemblee={assemblee}
-        aPourPct={aPourPct}
-        aContrePct={aContrePct}
-        aAbstPct={aAbstPct}
-        sortLabel={sortLabel}
-      />
+    <div className="fixed inset-0 z-50 flex items-end p-4 bg-black/50 backdrop-blur-sm overflow-hidden">
+      <div className="relative z-10 w-full bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
 
-      {/* Modal visible */}
-      <div className="fixed inset-0 z-50 flex items-end p-4 bg-black/50 backdrop-blur-sm">
-        <div className="w-full bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
-
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle size={18} className="text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800">
-                  {alreadyVoted ? 'Vote déjà enregistré' : 'Votre vote a été enregistré'}
-                </p>
-                <p className="text-xs text-slate-400">Résultats en temps réel</p>
-              </div>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle size={18} className="text-green-500" />
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-              <X size={16} className="text-slate-500" />
-            </button>
+            <div>
+              <p className="text-sm font-bold text-slate-800">
+                {alreadyVoted ? 'Vote déjà enregistré' : 'Votre vote a été enregistré'}
+              </p>
+              <p className="text-xs text-slate-400">Résultats en temps réel</p>
+            </div>
           </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+            <X size={16} className="text-slate-500" />
+          </button>
+        </div>
 
-          {/* Bannière déjà voté */}
-          {alreadyVoted && (
-            <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2 flex-shrink-0">
-              <CheckCircle size={15} className="text-amber-500 flex-shrink-0" />
-              <p className="text-sm text-amber-700 font-medium">Vous avez déjà voté sur ce sujet.</p>
-            </div>
-          )}
+        {/* Bannière déjà voté */}
+        {alreadyVoted && (
+          <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2 flex-shrink-0">
+            <CheckCircle size={15} className="text-amber-500 flex-shrink-0" />
+            <p className="text-sm text-amber-700 font-medium">Vous avez déjà voté sur ce sujet.</p>
+          </div>
+        )}
 
-          {/* Erreur génération image */}
-          {imageError && (
-            <div className="mx-5 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex-shrink-0">
-              <p className="text-xs text-red-600 font-medium">{imageError}</p>
-            </div>
-          )}
+        {/* Erreur génération image */}
+        {imageError && (
+          <div className="mx-5 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex-shrink-0">
+            <p className="text-xs text-red-600 font-medium">{imageError}</p>
+          </div>
+        )}
 
-          {/* Corps scrollable */}
-          <div className="overflow-y-auto flex-1">
-            {imageDataUrl ? (
-              /* ── Prévisualisation PNG ── */
-              <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-slate-700">Votre carte</p>
-                  <button
-                    onClick={() => setImageDataUrl(null)}
-                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
-                  >
-                    <ArrowLeft size={12} />
-                    Retour aux résultats
-                  </button>
-                </div>
-
-                <img
-                  src={imageDataUrl}
-                  alt="Carte de résultat CHOISISSONS"
-                  className="w-full rounded-2xl shadow-md"
-                  style={{ maxHeight: '55vh', objectFit: 'contain' }}
-                />
-
-                <a
-                  href={imageDataUrl}
-                  download="choisissons-vote.png"
-                  className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+        {/* Corps scrollable */}
+        <div className="overflow-y-auto flex-1">
+          {imageDataUrl ? (
+            /* ── Prévisualisation PNG générée (desktop) ── */
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-slate-700">Votre carte</p>
+                <button
+                  onClick={() => setImageDataUrl(null)}
+                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
                 >
-                  <Download size={15} />
-                  Télécharger l'image
-                </a>
-
-                <p className="text-xs text-slate-400 text-center">
-                  Sur Mac : clic droit sur l'image → « Enregistrer l'image sous… »
-                </p>
+                  <ArrowLeft size={12} />
+                  Retour aux résultats
+                </button>
               </div>
 
-            ) : (
-              /* ── Résultats ── */
-              <div className="p-5 space-y-5">
-                {loading ? (
-                  <div className="space-y-5">
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="space-y-2 animate-pulse">
-                        <div className="flex justify-between">
-                          <div className="h-3 bg-slate-100 rounded w-16" />
-                          <div className="h-3 bg-slate-100 rounded w-8"  />
-                        </div>
-                        <div className="h-3 bg-slate-100 rounded-full" />
+              <img
+                src={imageDataUrl}
+                alt="Carte de résultat CHOISISSONS"
+                className="w-full rounded-2xl shadow-md"
+                style={{ maxHeight: '55vh', objectFit: 'contain' }}
+              />
+
+              <a
+                href={imageDataUrl}
+                download="choisissons-vote.png"
+                className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                <Download size={15} />
+                Télécharger l'image
+              </a>
+
+              <p className="text-xs text-slate-400 text-center">
+                Sur Mac : clic droit sur l'image → « Enregistrer l'image sous… »
+              </p>
+            </div>
+
+          ) : (
+            /* ── Résultats + aperçu de la carte ── */
+            <div className="p-5 space-y-5">
+              {loading ? (
+                <div className="space-y-5">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="space-y-2 animate-pulse">
+                      <div className="flex justify-between">
+                        <div className="h-3 bg-slate-100 rounded w-16" />
+                        <div className="h-3 bg-slate-100 rounded w-8" />
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <>
-                    {/* Résultats citoyens */}
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
-                        {targetType === 'law' ? '👥 Avis citoyens CHOISISSONS' : '👥 Résultats citoyens'}
+                      <div className="h-3 bg-slate-100 rounded-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {/* Résultats citoyens */}
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+                      {targetType === 'law' ? '👥 Avis citoyens CHOISISSONS' : '👥 Résultats citoyens'}
+                    </p>
+                    <div className="space-y-3">
+                      {citizenBars.map(({ label, pct, color, textColor, count }) => (
+                        <div key={label}>
+                          <div className="flex items-baseline justify-between mb-1.5">
+                            <span className={`text-sm font-semibold ${textColor}`}>{label}</span>
+                            <span className={`text-xl font-black ${textColor}`}>{pct}%</span>
+                          </div>
+                          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
+                              style={{ width: animated ? `${pct}%` : '0%' }}
+                            />
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {count.toLocaleString('fr-FR')} vote{count !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-3 mt-1 border-t border-slate-100 text-center">
+                      <p className="text-sm text-slate-500">
+                        <span className="font-bold text-slate-700">{total.toLocaleString('fr-FR')}</span>{' '}
+                        vote{total !== 1 ? 's' : ''} exprimé{total !== 1 ? 's' : ''} au total
                       </p>
-                      <div className="space-y-3">
-                        {citizenBars.map(({ label, pct, color, textColor, count }) => (
+                    </div>
+                  </div>
+
+                  {/* Bloc Assemblée */}
+                  {assemblee && (
+                    <div className="bg-blue-50 border border-[#002395]/10 rounded-2xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[10px] font-bold text-[#002395] uppercase tracking-wider">
+                          🏛️ Et les députés ?
+                        </p>
+                        {sortLabel && (
+                          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${sortCls}`}>
+                            {sortLabel}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {[
+                          { label: 'Pour', pct: aPourPct, color: 'bg-green-500', count: assemblee.pour },
+                          { label: 'Contre', pct: aContrePct, color: 'bg-red-400', count: assemblee.contre },
+                          { label: 'Abstention', pct: aAbstPct, color: 'bg-slate-300', count: assemblee.abstention },
+                        ].map(({ label, pct, color, count }) => (
                           <div key={label}>
-                            <div className="flex items-baseline justify-between mb-1.5">
-                              <span className={`text-sm font-semibold ${textColor}`}>{label}</span>
-                              <span className={`text-xl font-black ${textColor}`}>{pct}%</span>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-slate-600 font-medium">{label}</span>
+                              <span className="text-xs font-bold text-slate-700">
+                                {pct}%{' '}
+                                <span className="font-normal text-slate-400">({count.toLocaleString('fr-FR')})</span>
+                              </span>
                             </div>
-                            <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-2 bg-white border border-slate-100 rounded-full overflow-hidden">
                               <div
                                 className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
                                 style={{ width: animated ? `${pct}%` : '0%' }}
                               />
                             </div>
-                            <p className="text-xs text-slate-400 mt-1">
-                              {count.toLocaleString('fr-FR')} vote{count !== 1 ? 's' : ''}
-                            </p>
                           </div>
                         ))}
                       </div>
-                      <div className="pt-3 mt-1 border-t border-slate-100 text-center">
-                        <p className="text-sm text-slate-500">
-                          <span className="font-bold text-slate-700">{total.toLocaleString('fr-FR')}</span>{' '}
-                          vote{total !== 1 ? 's' : ''} exprimé{total !== 1 ? 's' : ''} au total
-                        </p>
+                      <p className="text-xs text-slate-400 mt-3 text-right">
+                        {aTotal.toLocaleString('fr-FR')} député{aTotal !== 1 ? 's' : ''} ont voté
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ── Aperçu de la carte partageable ── */}
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Aperçu de la carte
+                    </p>
+                    {/* Le conteneur clipe la carte et la scale visuellement.
+                        La carte elle-même garde ses dimensions 1080×1920 pour la capture. */}
+                    <div
+                      ref={previewContainerRef}
+                      style={{
+                        width: '100%',
+                        height: `${previewHeight}px`,
+                        overflow: 'hidden',
+                        borderRadius: '12px',
+                      }}
+                    >
+                      <div style={{
+                        width: '1080px',
+                        height: '1920px',
+                        transform: `scale(${previewScale})`,
+                        transformOrigin: 'top left',
+                      }}>
+                        <ShareCard
+                          cardRef={cardRef}
+                          title={title}
+                          targetType={targetType}
+                          votes={votes}
+                          total={total}
+                          pourPct={pourPct}
+                          contrePct={contrePct}
+                          blancPct={blancPct}
+                          assemblee={assemblee}
+                          aPourPct={aPourPct}
+                          aContrePct={aContrePct}
+                          aAbstPct={aAbstPct}
+                          sortLabel={sortLabel}
+                        />
                       </div>
                     </div>
-
-                    {/* Bloc Assemblée */}
-                    {assemblee && (
-                      <div className="bg-blue-50 border border-[#002395]/10 rounded-2xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] font-bold text-[#002395] uppercase tracking-wider">
-                            🏛️ Et les députés ?
-                          </p>
-                          {sortLabel && (
-                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${sortCls}`}>
-                              {sortLabel}
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          {[
-                            { label: 'Pour',       pct: aPourPct,   color: 'bg-green-500', count: assemblee.pour       },
-                            { label: 'Contre',     pct: aContrePct, color: 'bg-red-400',   count: assemblee.contre     },
-                            { label: 'Abstention', pct: aAbstPct,   color: 'bg-slate-300', count: assemblee.abstention },
-                          ].map(({ label, pct, color, count }) => (
-                            <div key={label}>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs text-slate-600 font-medium">{label}</span>
-                                <span className="text-xs font-bold text-slate-700">
-                                  {pct}%{' '}
-                                  <span className="font-normal text-slate-400">({count.toLocaleString('fr-FR')})</span>
-                                </span>
-                              </div>
-                              <div className="h-2 bg-white border border-slate-100 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
-                                  style={{ width: animated ? `${pct}%` : '0%' }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-xs text-slate-400 mt-3 text-right">
-                          {aTotal.toLocaleString('fr-FR')} député{aTotal !== 1 ? 's' : ''} ont voté
-                        </p>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex-shrink-0 space-y-2">
-            <div className="flex gap-2">
-              <button
-                onClick={handleShare}
-                className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-slate-200"
-              >
-                {copied
-                  ? <><Copy size={15} />Copié !</>
-                  : <><Share2 size={15} />Lien</>
-                }
-              </button>
-              <button
-                onClick={handleShareImage}
-                disabled={loading || sharingImage}
-                className="flex-1 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-indigo-100 disabled:opacity-50"
-              >
-                {sharingImage
-                  ? <><span className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />Génération…</>
-                  : <><Camera size={15} />Image</>
-                }
-              </button>
+                  </div>
+                </>
+              )}
             </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex-shrink-0 space-y-2">
+          <div className="flex gap-2">
             <button
-              onClick={onClose}
-              className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm active:scale-95 transition-all"
+              onClick={handleShare}
+              className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-slate-200"
             >
-              Fermer
+              {copied
+                ? <><Copy size={15} />Copié !</>
+                : <><Share2 size={15} />Lien</>
+              }
+            </button>
+            <button
+              onClick={handleShareImage}
+              disabled={loading || sharingImage}
+              className="flex-1 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-indigo-100 disabled:opacity-50"
+            >
+              {sharingImage
+                ? <><span className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />Génération…</>
+                : <><Camera size={15} />Image</>
+              }
             </button>
           </div>
-
+          <button
+            onClick={onClose}
+            className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm active:scale-95 transition-all"
+          >
+            Fermer
+          </button>
         </div>
+
       </div>
-    </>
+    </div>
   )
 }
