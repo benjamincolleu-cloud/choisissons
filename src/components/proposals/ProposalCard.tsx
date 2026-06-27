@@ -8,11 +8,10 @@ interface ProposalCardProps {
     proposal: Proposal
     onOpen: () => void
     currentVote?: VoteChoice
-    onRevote?: () => void
     hasAlreadyVoted?: boolean
 }
 
-export default function ProposalCard({ proposal, onOpen, currentVote, onRevote, hasAlreadyVoted }: ProposalCardProps) {
+export default function ProposalCard({ proposal, onOpen, currentVote, hasAlreadyVoted }: ProposalCardProps) {
     const total = proposal.votes.pour + proposal.votes.contre + proposal.votes.blanc
     const progress = Math.min((proposal.signatures / proposal.targetSignatures) * 100, 100)
 
@@ -122,14 +121,13 @@ export default function ProposalCard({ proposal, onOpen, currentVote, onRevote, 
                                 <span className="text-sm text-slate-500">Vous avez déjà voté sur cette proposition</span>
                             )}
                         </div>
-                        {currentVote && (
-                            <button
-                                onClick={onRevote}
-                                className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors active:scale-95"
-                            >
-                                Changer mon vote
-                            </button>
-                        )}
+                        <button
+                            onClick={onOpen}
+                            className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors active:scale-95"
+                        >
+                            <Info size={15} />
+                            Voir les résultats →
+                        </button>
                     </div>
                 ) : (
                     <button

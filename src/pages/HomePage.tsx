@@ -40,7 +40,8 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
     const [votedChoices, setVotedChoices] = useState<Record<string, VoteChoice>>({})
     const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
     const [resultsProposalTitle, setResultsProposalTitle] = useState<string>('')
-    const [resultsLaw, setResultsLaw] = useState<{ id: string; title: string } | null>(null)
+    const [resultsAlreadyVoted, setResultsAlreadyVoted] = useState(false)
+    const [resultsLaw, setResultsLaw] = useState<{ id: string; title: string; alreadyVoted?: boolean } | null>(null)
 
     const previewResults = useMemo(
         () => new URLSearchParams(window.location.search).has('preview_results'),
@@ -150,44 +151,39 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         }),
         [proposals, activeStage, activeCategory])
 
-    const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, oldChoice?: VoteChoice, proposalTitle?: string) => {
-        const isRevote = oldChoice !== undefined
+    const handleVoted = useCallback(async (proposalId: string, choice: VoteChoice, proposalTitle?: string) => {
         setVotingProposal(null)
         setAgoraProposal(null)
 
-        const choiceMap: Record<VoteChoice, string> = {
-            pour: 'YES', contre: 'NO', blanc: 'ABSTAIN',
-        }
+        const choiceMap: Record<VoteChoice, string> = { pour: 'YES', contre: 'NO', blanc: 'ABSTAIN' }
         const mappedChoice = choiceMap[choice]
 
+        // Mise à jour optimiste
         setVotedChoices(prev => ({ ...prev, [proposalId]: choice }))
         setProposals(prev =>
-            prev.map(p => {
-                if (p.id !== proposalId) return p
-                const newVotes = { ...p.votes, [choice]: p.votes[choice] + 1 }
-                if (isRevote && oldChoice) newVotes[oldChoice] = Math.max(0, newVotes[oldChoice] - 1)
-                return { ...p, votes: newVotes }
-            })
+            prev.map(p => p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: p.votes[choice] + 1 } })
         )
 
         const proof = await generateVoteProof(proposalId, mappedChoice)
-        const voteParams = {
-            p_proposal_id: String(proposalId),
-            p_user_hash: userHash,
-            p_choice: mappedChoice,
-            p_proof_hash: proof,
-        }
-
         try {
-            const { error } = await supabase.rpc('deposer_bulletin', voteParams)
+            const { data, error } = await supabase.rpc('deposer_bulletin', {
+                p_proposal_id: String(proposalId),
+                p_user_hash: userHash,
+                p_choice: mappedChoice,
+                p_proof_hash: proof,
+            })
             if (error) throw error
 
-            if (isRevote) {
-                showToast('Vote mis à jour ✓', 'info')
-            } else {
-                setResultsProposalTitle(proposalTitle ?? '')
-                setResultsProposalId(proposalId)
+            const result = (data ?? {}) as { success?: boolean; already_voted?: boolean }
+            if (result.already_voted) {
+                // Annule la mise à jour optimiste (le DB n'a rien changé)
+                setProposals(prev =>
+                    prev.map(p => p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: Math.max(0, p.votes[choice] - 1) } })
+                )
             }
+            setResultsProposalTitle(proposalTitle ?? '')
+            setResultsAlreadyVoted(result.already_voted ?? false)
+            setResultsProposalId(proposalId)
         } catch {
             const pending = loadPendingVotes()
             if (!pending.some(v => v.proposalId === proposalId)) {
@@ -234,14 +230,25 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                 p_proof_hash: proof,
             }
 
-            const { error } = await supabase.rpc('deposer_bulletin', voteParams)
+            const { data, error } = await supabase.rpc('deposer_bulletin', voteParams)
 
             if (error) {
                 showToast('Réseau faible. Vote sauvegardé localement.', 'warning')
                 return
             }
 
-            setResultsLaw({ id: lawId, title: targetLaw?.title ?? '' })
+            const result = (data ?? {}) as { success?: boolean; already_voted?: boolean }
+            if (result.already_voted) {
+                // Annule la mise à jour optimiste
+                setLaws(prev =>
+                    prev.map(l =>
+                        (l.id === lawId || l.number === lawId)
+                            ? { ...l, votes: { ...l.votes, [choice]: Math.max(0, l.votes[choice] - 1) } }
+                            : l
+                    )
+                )
+            }
+            setResultsLaw({ id: lawId, title: targetLaw?.title ?? '', alreadyVoted: result.already_voted ?? false })
 
         } catch {
             showToast('Erreur de connexion. Vote sauvegardé localement.', 'warning')
@@ -377,6 +384,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                             key={law.id}
                                             law={law}
                                             onOpen={() => setAgoraLaw(lawToProposal(law))}
+                                            onShowResult={() => setResultsLaw({ id: law.id, title: law.title })}
                                             showAnBadge={lawTab === 'voter'}
                                             forceClose={previewResults}
                                             hasVoted={lawVotedIds.has(law.id)}
@@ -457,7 +465,6 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                         onOpen={() => setAgoraProposal(proposal)}
                                         currentVote={votedChoices[proposal.id]}
                                         hasAlreadyVoted={votedIds.has(proposal.id)}
-                                        onRevote={() => setVotingProposal(proposal)}
                                     />
                                 ))}
                             </div>
@@ -472,7 +479,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                     proposal={agoraProposal}
                     onVote={() => setVotingProposal(agoraProposal)}
                     onClose={() => setAgoraProposal(null)}
-                    hasVoted={agoraProposal.id in votedChoices}
+                    hasVoted={votedIds.has(agoraProposal.id) || agoraProposal.id in votedChoices}
                     userHash={userHash}
                     targetType="proposal"
                     onNavigateSupport={onNavigateSupport}
@@ -481,7 +488,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
             {votingProposal && (
                 <VotingBooth
                     proposal={votingProposal}
-                    onVoted={(choice) => handleVoted(votingProposal.id, choice, votedChoices[votingProposal.id], votingProposal.title)}
+                    onVoted={(choice) => handleVoted(votingProposal.id, choice, votingProposal.title)}
                     onClose={() => setVotingProposal(null)}
                 />
             )}
@@ -509,7 +516,8 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                 <ResultsModal
                     proposalId={resultsProposalId}
                     title={resultsProposalTitle}
-                    onClose={() => setResultsProposalId(null)}
+                    alreadyVoted={resultsAlreadyVoted}
+                    onClose={() => { setResultsProposalId(null); setResultsAlreadyVoted(false) }}
                 />
             )}
             {resultsLaw && (
@@ -517,6 +525,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                     proposalId={resultsLaw.id}
                     targetType="law"
                     title={resultsLaw.title}
+                    alreadyVoted={resultsLaw.alreadyVoted}
                     onClose={() => setResultsLaw(null)}
                 />
             )}
