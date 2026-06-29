@@ -18,14 +18,14 @@ export default function ImpactPage() {
             try {
                 const [citizensRes, votesRes, activeRes, adoptedRes, categoryRes] = await Promise.all([
                     Promise.resolve(supabase.rpc('get_citizen_count')).catch(() => ({ data: 0, error: null })),
-                    supabase.from('registre_scrutin').select('id', { count: 'exact', head: true }),
+                    supabase.rpc('get_votes_count'),
                     supabase.from('proposals').select('id', { count: 'exact', head: true }).eq('status', 'voting'),
                     supabase.from('proposals').select('id', { count: 'exact', head: true }).eq('status', 'adopted'),
                     supabase.from('proposals').select('category'),
                 ])
                 if (!cancelled) {
                     setCitizens((citizensRes.data as number) ?? 0)
-                    setVotes(votesRes.count ?? 0)
+                    setVotes((votesRes.data as number) ?? 0)
                     setActiveProposals(activeRes.count ?? 0)
                     setAdoptedProposals(adoptedRes.count ?? 0)
 
