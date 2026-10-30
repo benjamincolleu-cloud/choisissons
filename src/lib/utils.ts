@@ -89,6 +89,7 @@ export function lawToProposal(law: ParliamentaryLaw): Proposal {
     author: 'Assemblée Nationale',
     date: law.parliamentVoteDate,
     tags: law.tags,
+    dossier: law.dossier,
   }
 }
 

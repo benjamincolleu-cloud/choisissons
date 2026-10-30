@@ -1,8 +1,24 @@
-import type { ParliamentaryLaw } from '../../types'
+import type { ParliamentaryLaw, LoiDossier } from '../../types'
 import { parseFrDate, isCitizenVoteClosedFn } from '../../lib/utils'
 import { CITIZEN_VOTE_DAYS, MIN_VOTES_FOR_PCT } from '../../lib/constants'
 import VoteBar from '../common/VoteBar'
+import LawTimeline from './LawTimeline'
 import { Calendar, Lock, Vote, Landmark, ArrowLeft, Info, ChevronRight, CheckCircle } from 'lucide-react'
+
+const STATUT_BADGE: Record<LoiDossier['statut'], { label: string; className: string }> = {
+    promulgue: { label: 'En vigueur', className: 'text-white bg-green-600 border-green-600' },
+    adopte: { label: 'Adoptée définitivement', className: 'text-green-700 bg-green-50 border-green-200' },
+    rejete: { label: 'Rejetée', className: 'text-red-700 bg-red-50 border-red-200' },
+    en_cours: { label: 'En cours au Parlement', className: 'text-amber-700 bg-amber-50 border-amber-200' },
+    depose: { label: 'Déposée', className: 'text-slate-600 bg-slate-100 border-slate-200' },
+}
+
+// Phrase qui ne révèle pas le résultat du vote parlementaire (vote citoyen encore ouvert)
+function etapeNeutre(dossier: LoiDossier): string {
+    const etape = dossier.frise.find(e => e.etat === 'en_cours' || e.etat === 'en_attente')
+    if (!etape) return 'Vote des députés terminé, résultat dévoilé à la clôture du vote citoyen'
+    return `Étape actuelle : ${etape.titre}${etape.etat === 'en_attente' ? ' (en attente d\'examen)' : ''}`
+}
 
 interface LawCardProps {
     law: ParliamentaryLaw
@@ -30,6 +46,8 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
     }
 
     const isCitizenVoteClosed = forceClose || isCitizenVoteClosedFn(law)
+    const resultatsVisibles = isCitizenVoteClosed || !!hasVoted
+    const dossier = law.dossier
     const parliamentHasVoted =
         law.stage === 'adopted' || law.stage === 'rejected' || assembleeTotal > 0
 
@@ -76,6 +94,11 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                             ✓ Voté
                         </span>
                     )}
+                    {resultatsVisibles && dossier && (
+                        <span className={`text-xs font-semibold border rounded-full px-2 py-0.5 ${STATUT_BADGE[dossier.statut].className}`}>
+                            {STATUT_BADGE[dossier.statut].label}
+                        </span>
+                    )}
                     <span className="text-xs font-semibold text-slate-400">{law.number}</span>
                     <span className="ml-auto text-xs text-slate-400">{law.category}</span>
                 </div>
@@ -88,16 +111,39 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                     </p>
                 )}
 
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                        <Landmark size={12} className="text-slate-400" />
-                        <strong className="text-slate-700">{parliamentLabel}</strong>
+                {dossier && (
+                    <div className="mb-3">
+                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Où en est la loi ?</p>
+                        <LawTimeline frise={dossier.frise} variant="compact" resultatsVisibles={resultatsVisibles} />
+                        <p className="text-[13px] text-slate-700 mt-2">
+                            {resultatsVisibles ? dossier.etapeActuelle : etapeNeutre(dossier)}
+                        </p>
                     </div>
+                )}
+
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {!dossier && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                            <Landmark size={12} className="text-slate-400" />
+                            <strong className="text-slate-700">{parliamentLabel}</strong>
+                        </div>
+                    )}
+                    {dossier?.urlAn && (
+                        <a
+                            href={dossier.urlAn}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-auto flex items-center gap-1 text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2 py-0.5 hover:bg-blue-50 transition-colors active:scale-95"
+                        >
+                            <ArrowLeft size={10} className="rotate-[135deg]" />
+                            Suivre le dossier
+                        </a>
+                    )}
                     <a
                         href={law.officialUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="ml-auto flex items-center gap-1 text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2 py-0.5 hover:bg-blue-50 transition-colors active:scale-95"
+                        className={`${dossier?.urlAn ? '' : 'ml-auto '}flex items-center gap-1 text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2 py-0.5 hover:bg-blue-50 transition-colors active:scale-95`}
                     >
                         <ArrowLeft size={10} className="rotate-[135deg]" />
                         {linkLabel}
@@ -118,7 +164,7 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                                     </div>
                                     <div className="flex flex-col gap-0.5 text-[10px]">
                                         <span className="text-green-600 font-semibold">{assembleePourPct}% pour ({law.assembleePour.toLocaleString('fr-FR')})</span>
-                                        <span className="text-red-500 font-semibold">{assembleeContrePct}% contre ({assembleeContrePct.toLocaleString('fr-FR')})</span>
+                                        <span className="text-red-500 font-semibold">{assembleeContrePct}% contre ({law.assembleeContre.toLocaleString('fr-FR')})</span>
                                         {law.assembleeAbstention > 0 && (
                                             <span className="text-slate-400">{assembleeAbstPct}% abstention ({law.assembleeAbstention.toLocaleString('fr-FR')})</span>
                                         )}
