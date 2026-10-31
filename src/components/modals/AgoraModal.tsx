@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Users, ThumbsUp, ThumbsDown, Vote, MessageSquarePlus } from 'lucide-react'
 import { supabase, supabaseUrl, supabaseAnonKey } from '../../supabaseClient'
 import type { Proposal } from '../../types'
+import LawTimeline from '../proposals/LawTimeline'
 
 interface DbArg {
   id: number
@@ -392,6 +393,30 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
 
       {/* Corps scrollable */}
       <div className="flex-1 overflow-y-auto">
+        {proposal.dossier && (
+          <div className="p-4 border-b border-slate-100">
+            <h3 className="font-bold text-slate-700 text-sm mb-3">Où en est la loi ?</h3>
+            <LawTimeline
+              frise={proposal.dossier.frise}
+              statut={proposal.dossier.statut}
+              variant="detail"
+            />
+            <div className="flex gap-2 mt-3 flex-wrap">
+              {proposal.dossier.urlAn && (
+                <a href={proposal.dossier.urlAn} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2.5 py-1 hover:bg-blue-50 transition-colors">
+                  Dossier à l'Assemblée ↗
+                </a>
+              )}
+              {proposal.dossier.urlSenat && (
+                <a href={proposal.dossier.urlSenat} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-[#002395] font-semibold border border-[#002395]/30 rounded-full px-2.5 py-1 hover:bg-blue-50 transition-colors">
+                  Dossier au Sénat ↗
+                </a>
+              )}
+            </div>
+          </div>
+        )}
         <div className="p-4">
           {/* Titre section */}
           <div className="flex items-center gap-2 mb-1">

@@ -3,6 +3,8 @@ import { generateVoteProof } from './identity'
 import { showToast } from './toast'
 import type { PendingVote } from '../types'
 
+export const LOGIN_TO_VOTE_MESSAGE = 'Connectez-vous pour que votre vote compte. Votre choix est gardé et sera envoyé dès votre connexion.'
+
 export function loadPendingVotes(): PendingVote[] {
   try {
     const raw = localStorage.getItem('pending_votes')

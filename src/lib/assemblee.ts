@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient'
+import type { LoiDossier, EtapeFrise } from '../types'
 
 // Matches the ParliamentaryLaw interface in App.tsx
 export interface ANLaw {
@@ -17,6 +18,7 @@ export interface ANLaw {
   assembleeSort: string
   tags: string[]
   officialUrl: string
+  dossier?: LoiDossier
 }
 
 const ZERO_ASSEMBLEE = { assembleePour: 0, assembleeContre: 0, assembleeAbstention: 0, assembleeSort: '' }
@@ -83,7 +85,7 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
       .from('parliamentary_laws')
       // votes_pour/contre/blanc = colonnes entières mises à jour par deposer_bulletin
       // Ne pas lire le champ JSONB "votes" — il n'est jamais mis à jour
-      .select('id, number, title, description, resume, category, stage, parliament_vote_date, votes_pour, votes_contre, votes_blanc, assemblee_pour, assemblee_contre, assemblee_abstention, assemblee_sort, tags, official_url, synced_at')
+      .select('id, number, title, description, resume, category, stage, parliament_vote_date, votes_pour, votes_contre, votes_blanc, assemblee_pour, assemblee_contre, assemblee_abstention, assemblee_sort, tags, official_url, synced_at, dossier_uid')
       .order('synced_at', { ascending: false })
 
     if (!error && data && data.length > 0) {
@@ -106,6 +108,36 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
           officialUrl:         row.official_url ?? '',
         }
       })
+
+      // Frise « Où en est la loi ? » — facultative : en cas d'échec, les lois s'affichent sans frise
+      const uids = [...new Set(data.map(row => row.dossier_uid as string | null).filter((uid): uid is string => !!uid))]
+      if (uids.length > 0) {
+        try {
+          const { data: dossiers, error: dossiersError } = await supabase
+            .from('loi_dossiers')
+            .select('uid, statut, etape_actuelle, frise, url_an, url_senat, procedure_acceleree, date_derniere_activite')
+            .in('uid', uids)
+          if (!dossiersError && dossiers) {
+            const byUid = new Map<string, LoiDossier>()
+            for (const d of dossiers) {
+              byUid.set(d.uid, {
+                uid:                d.uid,
+                statut:             d.statut as LoiDossier['statut'],
+                etapeActuelle:      d.etape_actuelle ?? '',
+                frise:              (d.frise as EtapeFrise[]) ?? [],
+                urlAn:              d.url_an ?? '',
+                urlSenat:           d.url_senat ?? null,
+                procedureAcceleree: !!d.procedure_acceleree,
+                dateDerniereActivite: d.date_derniere_activite ?? null,
+              })
+            }
+            data.forEach((row, i) => {
+              const dossier = row.dossier_uid ? byUid.get(row.dossier_uid) : undefined
+              if (dossier) laws[i].dossier = dossier
+            })
+          }
+        } catch { /* ignore : lois affichées sans frise */ }
+      }
 
       return laws
     }

@@ -6,9 +6,9 @@ import { Landmark, X } from 'lucide-react'
 
 import type { Proposal, VoteChoice, Stage, ParliamentaryLaw, ProposalRow } from '../types'
 import { PROPOSALS, PARLIAMENTARY_LAWS_INITIAL } from '../lib/constants'
-import { mapRowToProposal, parseFrDate, isCitizenVoteClosedFn, citizenDeadlineMs, lawToProposal } from '../lib/utils'
+import { mapRowToProposal, parseFrDate, isCitizenVoteClosedFn, derniereActiviteMs, lawToProposal } from '../lib/utils'
 import { showToast } from '../lib/toast'
-import { loadPendingVotes, savePendingVotes } from '../lib/votes'
+import { loadPendingVotes, savePendingVotes, LOGIN_TO_VOTE_MESSAGE } from '../lib/votes'
 import { generateVoteProof } from '../lib/identity'
 
 import ProposalCard from '../components/proposals/ProposalCard'
@@ -112,7 +112,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         return () => { cancelled = true }
     }, [userHash])
 
-    // Vérifie dans registre_scrutin quelles lois l'utilisateur a déjà votées
+    // Vérifie via get_my_votes quelles lois l'utilisateur connecté a déjà votées
     useEffect(() => {
         if (!userHash || laws.length === 0) return
         let cancelled = false
@@ -122,13 +122,9 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         for (const law of laws) {
             anIdToLawId[getLawAnId(law)] = law.id
         }
-        const anIds = Object.keys(anIdToLawId)
 
         supabase
-            .from('registre_scrutin')
-            .select('proposal_id')
-            .in('proposal_id', anIds)
-            .eq('user_hash', userHash)
+            .rpc('get_my_votes', { p_user_hash: userHash })
             .then(({ data }) => {
                 if (cancelled || !data || data.length === 0) return
                 const voted = (data as { proposal_id: string }[])
@@ -164,6 +160,20 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
             prev.map(p => p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: p.votes[choice] + 1 } })
         )
 
+        // Non connecté : le vote est gardé et sera envoyé à la connexion
+        const deferUntilLogin = () => {
+            const pending = loadPendingVotes()
+            if (!pending.some(v => v.proposalId === proposalId)) {
+                savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
+            }
+            setProposals(prev =>
+                prev.map(p => p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: Math.max(0, p.votes[choice] - 1) } })
+            )
+            showToast(LOGIN_TO_VOTE_MESSAGE, 'info')
+        }
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { deferUntilLogin(); return }
+
         const proof = await generateVoteProof(proposalId, mappedChoice)
         try {
             const { data, error } = await supabase.rpc('deposer_bulletin', {
@@ -174,7 +184,8 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
             })
             if (error) throw error
 
-            const result = (data ?? {}) as { success?: boolean; already_voted?: boolean }
+            const result = (data ?? {}) as { success?: boolean; already_voted?: boolean; error?: string }
+            if (result.error === 'not_authenticated') { deferUntilLogin(); return }
             if (result.already_voted) {
                 // Annule la mise à jour optimiste (le DB n'a rien changé)
                 setProposals(prev =>
@@ -220,6 +231,24 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         }
         const mappedChoice = choiceMap[choice]
 
+        // Non connecté : le vote est gardé et sera envoyé à la connexion
+        const deferUntilLogin = () => {
+            const pending = loadPendingVotes()
+            if (!pending.some(v => v.proposalId === String(anId))) {
+                savePendingVotes([...pending, { proposalId: String(anId), userHash, choice: mappedChoice, timestamp: Date.now() }])
+            }
+            setLaws(prev =>
+                prev.map(l =>
+                    (l.id === lawId || l.number === lawId)
+                        ? { ...l, votes: { ...l.votes, [choice]: Math.max(0, l.votes[choice] - 1) } }
+                        : l
+                )
+            )
+            showToast(LOGIN_TO_VOTE_MESSAGE, 'info')
+        }
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { deferUntilLogin(); return }
+
         try {
             const proof = await generateVoteProof(anId, mappedChoice)
 
@@ -237,7 +266,8 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                 return
             }
 
-            const result = (data ?? {}) as { success?: boolean; already_voted?: boolean }
+            const result = (data ?? {}) as { success?: boolean; already_voted?: boolean; error?: string }
+            if (result.error === 'not_authenticated') { deferUntilLogin(); return }
             if (result.already_voted) {
                 // Annule la mise à jour optimiste
                 setLaws(prev =>
@@ -318,11 +348,11 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
 
                     const voterLaws = laws
                         .filter(l => l.stage !== 'upcoming' && !isCitizenVoteClosedFn(l, nowMs))
-                        .sort((a, b) => citizenDeadlineMs(a) - citizenDeadlineMs(b))
+                        .sort((a, b) => derniereActiviteMs(b) - derniereActiviteMs(a))
 
                     const resultatsLaws = laws
                         .filter(l => l.stage !== 'upcoming' && isCitizenVoteClosedFn(l, nowMs))
-                        .sort((a, b) => parseFrDate(b.parliamentVoteDate) - parseFrDate(a.parliamentVoteDate))
+                        .sort((a, b) => derniereActiviteMs(b) - derniereActiviteMs(a))
 
                     const tabs = [
                         { key: 'upcoming' as const, label: `🗓️ À venir`, count: upcomingLaws.length },
@@ -342,7 +372,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                     <Landmark size={20} className="text-blue-200 flex-shrink-0 mt-0.5" />
                                     <div>
                                         <p className="font-bold text-sm mb-0.5">Lois parlementaires — exprimez votre avis citoyen.</p>
-                                        <p className="text-blue-200 text-xs leading-relaxed">Les résultats de l'Assemblée sont révélés à la clôture du vote citoyen.</p>
+                                        <p className="text-blue-200 text-xs leading-relaxed">Votez tant que la loi est en débat au Parlement. Le détail du vote des députés s'affiche après votre vote.</p>
                                     </div>
                                 </div>
                             </div>
@@ -364,6 +394,13 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                     </button>
                                 ))}
                             </div>
+
+                            {lawTab === 'voter' && (
+                                <p className="text-xs text-slate-500 mb-3">Lois en débat au Parlement : votre avis compte jusqu'à la décision finale.</p>
+                            )}
+                            {lawTab === 'resultats' && (
+                                <p className="text-xs text-slate-500 mb-3">Lois dont le parcours au Parlement est terminé : en vigueur, adoptées ou rejetées.</p>
+                            )}
 
                             {lawTab === 'upcoming' && activeLaws.length > 0 && (
                                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 flex items-start gap-3">

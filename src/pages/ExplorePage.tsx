@@ -4,7 +4,7 @@ import { X, ArrowUpDown, Building2, ChevronRight, Users, Landmark, Newspaper } f
 import { supabase } from '../supabaseClient'
 import { showToast } from '../lib/toast'
 import { generateVoteProof } from '../lib/identity'
-import { loadPendingVotes, savePendingVotes } from '../lib/votes'
+import { loadPendingVotes, savePendingVotes, LOGIN_TO_VOTE_MESSAGE } from '../lib/votes'
 import { mapRowToProposal } from '../lib/utils'
 import { PROPOSALS, MOCK_ORGANISATIONS } from '../lib/constants'
 import type { Proposal, VoteChoice, Stage, Organisation, ProposalRow } from '../types'
@@ -134,6 +134,20 @@ export default function ExplorePage({ onNavigateCommuneRegister, onNavigateAssoc
       p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: p.votes[choice] + 1 } }
     ))
 
+    // Non connecté : le vote est gardé et sera envoyé à la connexion
+    const deferUntilLogin = () => {
+      const pending = loadPendingVotes()
+      if (!pending.some(v => v.proposalId === proposalId)) {
+        savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
+      }
+      setAllProposals(prev => prev.map(p =>
+        p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: Math.max(0, p.votes[choice] - 1) } }
+      ))
+      showToast(LOGIN_TO_VOTE_MESSAGE, 'info')
+    }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { deferUntilLogin(); return }
+
     const proof = await generateVoteProof(proposalId, mappedChoice)
     try {
       const { data, error } = await supabase.rpc('deposer_bulletin', {
@@ -143,7 +157,8 @@ export default function ExplorePage({ onNavigateCommuneRegister, onNavigateAssoc
         p_proof_hash: proof,
       })
       if (error) throw new Error('DB Error')
-      const result = (data ?? {}) as { success?: boolean; already_voted?: boolean }
+      const result = (data ?? {}) as { success?: boolean; already_voted?: boolean; error?: string }
+      if (result.error === 'not_authenticated') { deferUntilLogin(); return }
       if (result.already_voted) {
         setAllProposals(prev => prev.map(p =>
           p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: Math.max(0, p.votes[choice] - 1) } }

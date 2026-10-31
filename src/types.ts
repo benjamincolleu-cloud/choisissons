@@ -26,6 +26,7 @@ export interface Proposal {
   date: string
   tags: string[]
   blockchainProof?: string
+  dossier?: LoiDossier
 }
 
 // ── Supabase row shape ─────────────────────────────────────────
@@ -51,6 +52,19 @@ export interface ToastEntry { id: number; message: string; type: 'error' | 'warn
 export interface PendingVote { proposalId: string; userHash: string; choice: string; timestamp?: number }
 
 // ── Parliamentary Laws data ────────────────────────────────────
+export type EtatEtape = 'fait' | 'en_cours' | 'en_attente' | 'echec' | 'a_venir'
+export interface EtapeFrise { cle: 'depot' | 'an' | 'senat' | 'accord' | 'vigueur'; titre: string; etat: EtatEtape; date: string | null; detail: string }
+export interface LoiDossier {
+  uid: string
+  statut: 'depose' | 'en_cours' | 'adopte' | 'promulgue' | 'rejete'
+  etapeActuelle: string
+  frise: EtapeFrise[]
+  urlAn: string
+  urlSenat: string | null
+  procedureAcceleree: boolean
+  dateDerniereActivite: string | null
+}
+
 export interface ParliamentaryLaw {
   id: string
   number: string
@@ -67,6 +81,7 @@ export interface ParliamentaryLaw {
   assembleeSort: string
   tags: string[]
   officialUrl: string
+  dossier?: LoiDossier
 }
 
 // ── Organisation types ─────────────────────────────────────────

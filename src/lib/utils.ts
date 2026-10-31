@@ -1,4 +1,4 @@
-import type { Proposal, ProposalRow, ParliamentaryLaw, Stage, CommuneRole, CommuneAction } from '../types'
+import type { Proposal, ProposalRow, ParliamentaryLaw, Stage, CommuneRole, CommuneAction, LoiDossier } from '../types'
 import { FR_MOIS, CITIZEN_VOTE_DAYS } from './constants'
 
 export function mapRowToProposal(row: ProposalRow): Proposal {
@@ -62,8 +62,18 @@ export function parseFrDate(s: string): number {
   return Infinity
 }
 
-export function isCitizenVoteClosedFn(law: { stage: string; parliamentVoteDate: string }, nowMs = Date.now()): boolean {
+// Parcours au Parlement terminé : loi promulguée, adoptée définitivement ou rejetée
+export function estLoiTerminee(law: { dossier?: LoiDossier }): boolean {
+  const statut = law.dossier?.statut
+  return statut === 'promulgue' || statut === 'adopte' || statut === 'rejete'
+}
+
+// Règle du 30/10/2026 : le vote citoyen reste ouvert tant que la loi est en débat au Parlement.
+// Sans dossier législatif (ex. résolutions, votées par la seule Assemblée) : ancienne règle des 14 jours.
+// nowMs = Infinity : mode aperçu des résultats (inchangé).
+export function isCitizenVoteClosedFn(law: { stage: string; parliamentVoteDate: string; dossier?: LoiDossier }, nowMs = Date.now()): boolean {
   if (law.stage === 'closed' || law.stage === 'archived') return true
+  if (law.dossier && nowMs !== Infinity) return estLoiTerminee(law)
   const dateMs = parseFrDate(law.parliamentVoteDate)
   return dateMs !== Infinity && nowMs >= dateMs + CITIZEN_VOTE_DAYS * 24 * 3600 * 1000
 }
@@ -71,6 +81,13 @@ export function isCitizenVoteClosedFn(law: { stage: string; parliamentVoteDate: 
 export function citizenDeadlineMs(law: { parliamentVoteDate: string }): number {
   const t = parseFrDate(law.parliamentVoteDate)
   return t === Infinity ? Infinity : t + CITIZEN_VOTE_DAYS * 24 * 3600 * 1000
+}
+
+// Date de la dernière étape au Parlement, pour trier (les plus récemment débattues d'abord)
+export function derniereActiviteMs(law: { parliamentVoteDate: string; dossier?: LoiDossier }): number {
+  const iso = law.dossier?.dateDerniereActivite
+  const t = iso ? new Date(iso).getTime() : parseFrDate(law.parliamentVoteDate)
+  return Number.isFinite(t) ? t : 0
 }
 
 export function lawToProposal(law: ParliamentaryLaw): Proposal {
@@ -89,6 +106,7 @@ export function lawToProposal(law: ParliamentaryLaw): Proposal {
     author: 'Assemblée Nationale',
     date: law.parliamentVoteDate,
     tags: law.tags,
+    dossier: law.dossier,
   }
 }
 
