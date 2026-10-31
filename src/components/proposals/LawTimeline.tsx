@@ -1,53 +1,41 @@
-import type { EtapeFrise, EtatEtape } from '../../types'
+import type { EtapeFrise, LoiDossier } from '../../types'
 import { Check, Clock, X } from 'lucide-react'
 
 interface LawTimelineProps {
     frise: EtapeFrise[]
     variant: 'compact' | 'detail'
-    resultatsVisibles: boolean
+    statut: LoiDossier['statut']
 }
 
-// État réellement affiché : tant que les résultats sont masqués, « fait » et « échec »
-// se ressemblent (anti-influence) — on ne montre ni adopté ni rejeté.
-type EtatAffiche = EtatEtape | 'neutre'
+// Décision du 30/10/2026 : la frise montre toujours le vrai parcours de la loi
+// (information publique, comme dans les médias). Seuls les chiffres du vote
+// des députés restent masqués jusqu'au vote du citoyen (voir LawCard).
+// « rattrape » : une assemblée a rejeté le texte, mais la loi a finalement été
+// adoptée (ex. les députés ont eu le dernier mot) → orange, pas rouge.
+type EtatAffiche = EtapeFrise['etat'] | 'rattrape'
 
-const ETAT_LABEL: Record<EtatEtape, string> = {
+const ETAT_LABEL: Record<EtatAffiche, string> = {
     fait: 'fait',
     en_cours: 'en cours',
     en_attente: 'en attente',
-    echec: 'échec',
+    echec: 'rejeté',
     a_venir: 'à venir',
+    rattrape: 'rejeté, puis texte finalement adopté',
 }
 
-function parseIsoDate(date: string | null): [string, string, string] | null {
-    const m = date?.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    return m ? [m[3], m[2], m[1]] : null
-}
-
-function formatJJMM(date: string | null): string {
-    const p = parseIsoDate(date)
-    return p ? `${p[0]}/${p[1]}` : ''
-}
-
-function formatJJMMAAAA(date: string | null): string {
-    const p = parseIsoDate(date)
-    return p ? `${p[0]}/${p[1]}/${p[2]}` : ''
-}
-
-function etatAffiche(etape: EtapeFrise, resultatsVisibles: boolean): EtatAffiche {
-    if (!resultatsVisibles && (etape.etat === 'fait' || etape.etat === 'echec')) return 'neutre'
+function etatAffiche(etape: EtapeFrise, statut: LoiDossier['statut']): EtatAffiche {
+    if (etape.etat === 'echec' && (statut === 'promulgue' || statut === 'adopte')) return 'rattrape'
     return etape.etat
 }
 
-// Texte neutre d'une étape terminée (le dépôt n'est pas un vote : il ne révèle rien)
-function texteNeutre(etape: EtapeFrise): string {
-    const jjmm = formatJJMM(etape.date)
-    if (etape.cle === 'depot') return jjmm ? `Déposé le ${jjmm}` : 'Déposé'
-    return jjmm ? `Vote le ${jjmm}` : 'Vote terminé'
+// Étape passée : le texte a continué son chemin
+function estFranchi(etat: EtatAffiche): boolean {
+    return etat === 'fait' || etat === 'rattrape'
 }
 
-function estTermine(etat: EtatAffiche): boolean {
-    return etat === 'fait' || etat === 'neutre'
+function formatJJMMAAAA(date: string | null): string {
+    const m = date?.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
 }
 
 function Pastille({ etat, size }: { etat: EtatAffiche; size: number }) {
@@ -57,8 +45,8 @@ function Pastille({ etat, size }: { etat: EtatAffiche; size: number }) {
     switch (etat) {
         case 'fait':
             return <span className={`${base} bg-green-500`} style={style}><Check size={icon} className="text-white" strokeWidth={3} /></span>
-        case 'neutre':
-            return <span className={`${base} bg-[#002395]`} style={style}><Check size={icon} className="text-white" strokeWidth={3} /></span>
+        case 'rattrape':
+            return <span className={`${base} bg-orange-400`} style={style}><X size={icon} className="text-white" strokeWidth={3} /></span>
         case 'echec':
             return <span className={`${base} bg-red-500`} style={style}><X size={icon} className="text-white" strokeWidth={3} /></span>
         case 'en_cours':
@@ -70,15 +58,12 @@ function Pastille({ etat, size }: { etat: EtatAffiche; size: number }) {
     }
 }
 
-export default function LawTimeline({ frise, variant, resultatsVisibles }: LawTimelineProps) {
-    const etats = frise.map(e => etatAffiche(e, resultatsVisibles))
-    const ariaLabel = (etape: EtapeFrise, i: number) =>
-        `${etape.titre} : ${etats[i] === 'neutre' ? texteNeutre(etape).toLowerCase() : ETAT_LABEL[etape.etat]}`
-    // Trait coloré entre deux étapes terminées (bleu en mode neutre, vert sinon)
+export default function LawTimeline({ frise, variant, statut }: LawTimelineProps) {
+    const etats = frise.map(e => etatAffiche(e, statut))
+    const ariaLabel = (etape: EtapeFrise, i: number) => `${etape.titre} : ${ETAT_LABEL[etats[i]]}`
+    // Trait vert entre deux étapes franchies
     const traitClass = (i: number) =>
-        estTermine(etats[i]) && estTermine(etats[i + 1])
-            ? (resultatsVisibles ? 'bg-green-500' : 'bg-[#002395]')
-            : 'bg-slate-200'
+        estFranchi(etats[i]) && estFranchi(etats[i + 1]) ? 'bg-green-500' : 'bg-slate-200'
 
     if (variant === 'compact') {
         return (
@@ -90,7 +75,7 @@ export default function LawTimeline({ frise, variant, resultatsVisibles }: LawTi
                             {i < frise.length - 1 && (
                                 <span aria-hidden="true" className={`absolute top-[8px] left-1/2 w-full h-[2px] ${traitClass(i)}`} />
                             )}
-                            <span role="img" aria-label={ariaLabel(etape, i)} title={etats[i] === 'neutre' ? texteNeutre(etape) : undefined}>
+                            <span role="img" aria-label={ariaLabel(etape, i)} title={etape.detail || undefined}>
                                 <Pastille etat={etats[i]} size={18} />
                             </span>
                             <span className={`mt-1 text-[10px] text-slate-500 text-center leading-tight ${actuelle ? 'font-bold' : ''}`}>
@@ -107,11 +92,7 @@ export default function LawTimeline({ frise, variant, resultatsVisibles }: LawTi
         <div>
             <ol aria-label="Où en est la loi">
                 {frise.map((etape, i) => {
-                    const neutre = etats[i] === 'neutre'
-                    const date = formatJJMMAAAA(etape.date)
-                    const ligne = neutre && etape.cle !== 'depot'
-                        ? texteNeutre(etape)
-                        : [date, etape.detail].filter(Boolean).join(' · ')
+                    const ligne = [formatJJMMAAAA(etape.date), etape.detail].filter(Boolean).join(' · ')
                     const derniere = i === frise.length - 1
                     return (
                         <li key={etape.cle} className="flex gap-3">
@@ -129,10 +110,12 @@ export default function LawTimeline({ frise, variant, resultatsVisibles }: LawTi
                     )
                 })}
             </ol>
-            <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
-                <p className="text-[13px] font-semibold text-slate-700">Pourquoi c'est encore en débat après le vote des députés ?</p>
-                <p className="text-[13px] text-slate-500">Une loi doit être adoptée par les deux assemblées.</p>
-            </div>
+            {statut === 'en_cours' && (
+                <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
+                    <p className="text-[13px] font-semibold text-slate-700">Pourquoi c'est encore en débat après le vote des députés ?</p>
+                    <p className="text-[13px] text-slate-500">Une loi doit être adoptée par les deux assemblées.</p>
+                </div>
+            )}
         </div>
     )
 }

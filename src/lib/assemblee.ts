@@ -115,7 +115,7 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
         try {
           const { data: dossiers, error: dossiersError } = await supabase
             .from('loi_dossiers')
-            .select('uid, statut, etape_actuelle, frise, url_an, url_senat, procedure_acceleree')
+            .select('uid, statut, etape_actuelle, frise, url_an, url_senat, procedure_acceleree, date_derniere_activite')
             .in('uid', uids)
           if (!dossiersError && dossiers) {
             const byUid = new Map<string, LoiDossier>()
@@ -128,6 +128,7 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
                 urlAn:              d.url_an ?? '',
                 urlSenat:           d.url_senat ?? null,
                 procedureAcceleree: !!d.procedure_acceleree,
+                dateDerniereActivite: d.date_derniere_activite ?? null,
               })
             }
             data.forEach((row, i) => {

@@ -37,7 +37,7 @@ Puis remplis les valeurs dans `.env.test` :
 npm run test:vote
 ```
 
-Tu dois voir 6 tests verts. Si l'un est rouge, ne pousse rien.
+Tu dois voir 8 tests verts. Si l'un est rouge, ne pousse rien.
 
 ### 3. Configurer les secrets GitHub
 
@@ -95,12 +95,15 @@ git push origin main
     ↓
 GitHub Actions se lance
     ↓
-Test 1 : dépose un vote → vérifie votes_pour = 1
-Test 2 : re-vote → vérifie pas de doublon
-Test 3 : 2 utilisateurs → vérifie cumul correct
-Test 4 : vérifie is_law = true
-Test 5 : vérifie politique RLS UPDATE présente
-Test 6 : vérifie SET row_security = off présent
+(2 comptes citoyens temporaires + 1 loi de test, supprimés à la fin)
+Test 1 : un visiteur non connecté ne peut pas voter
+Test 2 : un citoyen connecté vote → compté, identifiant calculé par la base
+Test 3 : vote définitif → le même citoyen ne peut pas revoter
+Test 4 : impossible de voter à la place d'un autre
+Test 5 : un choix invalide est refusé
+Test 6 : « Mes votes » ne renvoie que les votes du compte connecté
+Test 7 : personne ne modifie les compteurs directement
+Test 8 : personne n'écrit directement dans le registre ou l'urne
     ↓
 Si tous OK → build → déploiement Vercel production
 Si un test FAIL → arrêt → Vercel ne se lance PAS
@@ -116,6 +119,8 @@ npm run test:vote:watch     # mode watch (relance à chaque sauvegarde)
 ---
 
 ## Fonctions de vérification en base
+
+> ⚠️ Depuis le 30/10/2026, `check_vote_rls()` est obsolète (elle contrôle l'ancienne politique de mise à jour, supprimée pour la sécurité). Les tests ci-dessus vérifient directement le comportement du vote.
 
 Tu peux vérifier les garde-fous à tout moment dans Supabase SQL Editor :
 

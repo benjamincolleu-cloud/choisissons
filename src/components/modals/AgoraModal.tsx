@@ -398,8 +398,8 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
             <h3 className="font-bold text-slate-700 text-sm mb-3">Où en est la loi ?</h3>
             <LawTimeline
               frise={proposal.dossier.frise}
+              statut={proposal.dossier.statut}
               variant="detail"
-              resultatsVisibles={!!hasVoted || proposal.stage === 'closed'}
             />
             <div className="flex gap-2 mt-3 flex-wrap">
               {proposal.dossier.urlAn && (

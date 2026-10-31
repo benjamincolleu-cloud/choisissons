@@ -6,7 +6,7 @@ import { Landmark, X } from 'lucide-react'
 
 import type { Proposal, VoteChoice, Stage, ParliamentaryLaw, ProposalRow } from '../types'
 import { PROPOSALS, PARLIAMENTARY_LAWS_INITIAL } from '../lib/constants'
-import { mapRowToProposal, parseFrDate, isCitizenVoteClosedFn, citizenDeadlineMs, lawToProposal } from '../lib/utils'
+import { mapRowToProposal, parseFrDate, isCitizenVoteClosedFn, derniereActiviteMs, lawToProposal } from '../lib/utils'
 import { showToast } from '../lib/toast'
 import { loadPendingVotes, savePendingVotes, LOGIN_TO_VOTE_MESSAGE } from '../lib/votes'
 import { generateVoteProof } from '../lib/identity'
@@ -348,11 +348,11 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
 
                     const voterLaws = laws
                         .filter(l => l.stage !== 'upcoming' && !isCitizenVoteClosedFn(l, nowMs))
-                        .sort((a, b) => citizenDeadlineMs(a) - citizenDeadlineMs(b))
+                        .sort((a, b) => derniereActiviteMs(b) - derniereActiviteMs(a))
 
                     const resultatsLaws = laws
                         .filter(l => l.stage !== 'upcoming' && isCitizenVoteClosedFn(l, nowMs))
-                        .sort((a, b) => parseFrDate(b.parliamentVoteDate) - parseFrDate(a.parliamentVoteDate))
+                        .sort((a, b) => derniereActiviteMs(b) - derniereActiviteMs(a))
 
                     const tabs = [
                         { key: 'upcoming' as const, label: `🗓️ À venir`, count: upcomingLaws.length },
@@ -372,7 +372,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                     <Landmark size={20} className="text-blue-200 flex-shrink-0 mt-0.5" />
                                     <div>
                                         <p className="font-bold text-sm mb-0.5">Lois parlementaires — exprimez votre avis citoyen.</p>
-                                        <p className="text-blue-200 text-xs leading-relaxed">Les résultats de l'Assemblée sont révélés à la clôture du vote citoyen.</p>
+                                        <p className="text-blue-200 text-xs leading-relaxed">Votez tant que la loi est en débat au Parlement. Le détail du vote des députés s'affiche après votre vote.</p>
                                     </div>
                                 </div>
                             </div>
@@ -394,6 +394,13 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                     </button>
                                 ))}
                             </div>
+
+                            {lawTab === 'voter' && (
+                                <p className="text-xs text-slate-500 mb-3">Lois en débat au Parlement : votre avis compte jusqu'à la décision finale.</p>
+                            )}
+                            {lawTab === 'resultats' && (
+                                <p className="text-xs text-slate-500 mb-3">Lois dont le parcours au Parlement est terminé : en vigueur, adoptées ou rejetées.</p>
+                            )}
 
                             {lawTab === 'upcoming' && activeLaws.length > 0 && (
                                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 flex items-start gap-3">

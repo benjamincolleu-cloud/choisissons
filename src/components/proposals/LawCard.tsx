@@ -13,13 +13,6 @@ const STATUT_BADGE: Record<LoiDossier['statut'], { label: string; className: str
     depose: { label: 'Déposée', className: 'text-slate-600 bg-slate-100 border-slate-200' },
 }
 
-// Phrase qui ne révèle pas le résultat du vote parlementaire (vote citoyen encore ouvert)
-function etapeNeutre(dossier: LoiDossier): string {
-    const etape = dossier.frise.find(e => e.etat === 'en_cours' || e.etat === 'en_attente')
-    if (!etape) return 'Vote des députés terminé, résultat dévoilé à la clôture du vote citoyen'
-    return `Étape actuelle : ${etape.titre}${etape.etat === 'en_attente' ? ' (en attente d\'examen)' : ''}`
-}
-
 interface LawCardProps {
     law: ParliamentaryLaw
     onOpen: () => void
@@ -86,7 +79,7 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                         </span>
                     ) : (
                         <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5 flex items-center gap-1">
-                            <Vote size={12} /> Vote citoyen ouvert {daysLeft >= 0 && `(J-${daysLeft})`}
+                            <Vote size={12} /> Vote citoyen ouvert {!dossier && daysLeft >= 0 && `(J-${daysLeft})`}
                         </span>
                     )}
                     {hasVoted && (
@@ -94,7 +87,7 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                             ✓ Voté
                         </span>
                     )}
-                    {resultatsVisibles && dossier && (
+                    {dossier && (
                         <span className={`text-xs font-semibold border rounded-full px-2 py-0.5 ${STATUT_BADGE[dossier.statut].className}`}>
                             {STATUT_BADGE[dossier.statut].label}
                         </span>
@@ -114,10 +107,8 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                 {dossier && (
                     <div className="mb-3">
                         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Où en est la loi ?</p>
-                        <LawTimeline frise={dossier.frise} variant="compact" resultatsVisibles={resultatsVisibles} />
-                        <p className="text-[13px] text-slate-700 mt-2">
-                            {resultatsVisibles ? dossier.etapeActuelle : etapeNeutre(dossier)}
-                        </p>
+                        <LawTimeline frise={dossier.frise} statut={dossier.statut} variant="compact" />
+                        <p className="text-[13px] text-slate-700 mt-2">{dossier.etapeActuelle}</p>
                     </div>
                 )}
 
@@ -151,7 +142,7 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                 </div>
                 <p className="text-xs text-slate-400 mb-3">Source : Assemblée Nationale officielle</p>
 
-                {isCitizenVoteClosed ? (
+                {resultatsVisibles ? (
                     <div className="flex gap-3 mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
                         <div className="flex-1 min-w-0">
                             <p className="text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">🏛️ Assemblée</p>
@@ -197,7 +188,7 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                             </p>
                         )}
                         <p className="text-xs text-slate-400 mt-2 italic">
-                            🏛️ Résultat de l'Assemblée dévoilé à la clôture du vote
+                            🏛️ Le détail du vote des députés s'affiche après votre vote
                         </p>
                     </>
                 )}

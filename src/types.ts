@@ -62,6 +62,7 @@ export interface LoiDossier {
   urlAn: string
   urlSenat: string | null
   procedureAcceleree: boolean
+  dateDerniereActivite: string | null
 }
 
 export interface ParliamentaryLaw {
