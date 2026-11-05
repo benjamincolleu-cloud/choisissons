@@ -3,6 +3,7 @@ import { X, Users, ThumbsUp, ThumbsDown, Vote, MessageSquarePlus } from 'lucide-
 import { supabase, supabaseUrl, supabaseAnonKey } from '../../supabaseClient'
 import type { Proposal } from '../../types'
 import LawTimeline from '../proposals/LawTimeline'
+import LawFiche from '../proposals/LawFiche'
 
 interface DbArg {
   id: number
@@ -357,7 +358,7 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
               <p className="text-xs text-amber-800 leading-relaxed bg-amber-50 rounded-lg p-2">{proposal.description}</p>
             </div>
           </div>
-        ) : proposal.resume ? (
+        ) : proposal.resume && !proposal.fiche ? (
           <p className="text-sm text-slate-600 leading-relaxed">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1.5" title="Résumé simplifié, non officiel">En clair —</span>
             {proposal.resume}
@@ -417,6 +418,7 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
             </div>
           </div>
         )}
+        {proposal.fiche && <LawFiche fiche={proposal.fiche} />}
         <div className="p-4">
           {/* Titre section */}
           <div className="flex items-center gap-2 mb-1">

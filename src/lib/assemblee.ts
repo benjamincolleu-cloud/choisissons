@@ -1,5 +1,5 @@
 import { supabase } from '../supabaseClient'
-import type { LoiDossier, EtapeFrise } from '../types'
+import type { LoiDossier, EtapeFrise, LoiFiche } from '../types'
 
 // Matches the ParliamentaryLaw interface in App.tsx
 export interface ANLaw {
@@ -19,6 +19,7 @@ export interface ANLaw {
   tags: string[]
   officialUrl: string
   dossier?: LoiDossier
+  fiche?: LoiFiche
 }
 
 const ZERO_ASSEMBLEE = { assembleePour: 0, assembleeContre: 0, assembleeAbstention: 0, assembleeSort: '' }
@@ -137,6 +138,37 @@ export async function fetchDossiersLegislatifs(): Promise<ANLaw[]> {
             })
           }
         } catch { /* ignore : lois affichées sans frise */ }
+
+        // Fiches « vulgarisation » — la base ne renvoie que les fiches publiées (validées par l'équipe)
+        try {
+          const { data: fiches, error: fichesError } = await supabase
+            .from('loi_fiches')
+            .select('id, dossier_uid, titre_court, en_clair, changements, contexte, debat, arguments_intro, arguments_pour, arguments_contre, sources, maj_le')
+            .in('dossier_uid', uids)
+          if (!fichesError && fiches) {
+            const ficheParUid = new Map<string, LoiFiche>()
+            for (const f of fiches) {
+              ficheParUid.set(f.dossier_uid, {
+                id:              f.id,
+                dossierUid:      f.dossier_uid,
+                titreCourt:      f.titre_court ?? '',
+                enClair:         f.en_clair ?? '',
+                changements:     (f.changements as LoiFiche['changements']) ?? [],
+                contexte:        f.contexte ?? null,
+                debat:           (f.debat as LoiFiche['debat']) ?? null,
+                argumentsIntro:  f.arguments_intro ?? null,
+                argumentsPour:   (f.arguments_pour as LoiFiche['argumentsPour']) ?? [],
+                argumentsContre: (f.arguments_contre as LoiFiche['argumentsContre']) ?? [],
+                sources:         (f.sources as LoiFiche['sources']) ?? [],
+                majLe:           f.maj_le ?? '',
+              })
+            }
+            data.forEach((row, i) => {
+              const fiche = row.dossier_uid ? ficheParUid.get(row.dossier_uid) : undefined
+              if (fiche) laws[i].fiche = fiche
+            })
+          }
+        } catch { /* ignore : lois affichées sans fiche */ }
       }
 
       return laws

@@ -97,10 +97,10 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
                 </div>
 
                 <h3 className="font-bold text-slate-800 text-base leading-snug mb-1">{law.title}</h3>
-                {law.resume && (
+                {(law.fiche?.enClair || law.resume) && (
                     <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mb-3">
                         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1.5" title="Résumé simplifié, non officiel">En clair —</span>
-                        {law.resume}
+                        {law.fiche?.enClair || law.resume}
                     </p>
                 )}
 
