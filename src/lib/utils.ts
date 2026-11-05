@@ -107,6 +107,7 @@ export function lawToProposal(law: ParliamentaryLaw): Proposal {
     date: law.parliamentVoteDate,
     tags: law.tags,
     dossier: law.dossier,
+    fiche: law.fiche,
   }
 }
 

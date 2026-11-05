@@ -27,6 +27,7 @@ export interface Proposal {
   tags: string[]
   blockchainProof?: string
   dossier?: LoiDossier
+  fiche?: LoiFiche
 }
 
 // ── Supabase row shape ─────────────────────────────────────────
@@ -65,6 +66,25 @@ export interface LoiDossier {
   dateDerniereActivite: string | null
 }
 
+// Fiche « vulgarisation » d'une loi : rédigée par IA, validée par l'équipe avant publication
+export interface FicheChangement { titre: string; texte: string; source_url?: string }
+export interface FicheArgument { texte: string; auteur: string; source_url?: string }
+export interface FicheDebatEtape { position: 'oui' | 'non' | 'a_suivre'; texte: string; source_url?: string }
+export interface LoiFiche {
+  id: string
+  dossierUid: string
+  titreCourt: string
+  enClair: string
+  changements: FicheChangement[]
+  contexte: string | null
+  debat: { question: string; etapes: FicheDebatEtape[] } | null
+  argumentsIntro: string | null
+  argumentsPour: FicheArgument[]
+  argumentsContre: FicheArgument[]
+  sources: { libelle: string; url: string }[]
+  majLe: string
+}
+
 export interface ParliamentaryLaw {
   id: string
   number: string
@@ -82,6 +102,7 @@ export interface ParliamentaryLaw {
   tags: string[]
   officialUrl: string
   dossier?: LoiDossier
+  fiche?: LoiFiche
 }
 
 // ── Organisation types ─────────────────────────────────────────
