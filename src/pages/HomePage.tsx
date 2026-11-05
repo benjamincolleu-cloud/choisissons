@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient'
 import { fetchDossiersLegislatifs } from '../lib/assemblee'
 import { Landmark, X } from 'lucide-react'
 
-import type { Proposal, VoteChoice, Stage, ParliamentaryLaw, ProposalRow } from '../types'
+import type { Proposal, VoteChoice, Stage, ParliamentaryLaw, ProposalRow, LoiFiche } from '../types'
 import { PROPOSALS, PARLIAMENTARY_LAWS_INITIAL } from '../lib/constants'
 import { mapRowToProposal, parseFrDate, isCitizenVoteClosedFn, derniereActiviteMs, lawToProposal } from '../lib/utils'
 import { showToast } from '../lib/toast'
@@ -41,7 +41,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
     const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
     const [resultsProposalTitle, setResultsProposalTitle] = useState<string>('')
     const [resultsAlreadyVoted, setResultsAlreadyVoted] = useState(false)
-    const [resultsLaw, setResultsLaw] = useState<{ id: string; title: string; alreadyVoted?: boolean } | null>(null)
+    const [resultsLaw, setResultsLaw] = useState<{ id: string; title: string; alreadyVoted?: boolean; fiche?: LoiFiche } | null>(null)
 
     const previewResults = useMemo(
         () => new URLSearchParams(window.location.search).has('preview_results'),
@@ -278,7 +278,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                     )
                 )
             }
-            setResultsLaw({ id: lawId, title: targetLaw?.title ?? '', alreadyVoted: result.already_voted ?? false })
+            setResultsLaw({ id: lawId, title: targetLaw?.title ?? '', alreadyVoted: result.already_voted ?? false, fiche: targetLaw?.fiche })
 
         } catch {
             showToast('Erreur de connexion. Vote sauvegardé localement.', 'warning')
@@ -421,7 +421,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                             key={law.id}
                                             law={law}
                                             onOpen={() => setAgoraLaw(lawToProposal(law))}
-                                            onShowResult={() => setResultsLaw({ id: law.id, title: law.title })}
+                                            onShowResult={() => setResultsLaw({ id: law.id, title: law.title, fiche: law.fiche })}
                                             showAnBadge={lawTab === 'voter'}
                                             forceClose={previewResults}
                                             hasVoted={lawVotedIds.has(law.id)}
@@ -563,6 +563,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                     targetType="law"
                     title={resultsLaw.title}
                     alreadyVoted={resultsLaw.alreadyVoted}
+                    fiche={resultsLaw.fiche}
                     onClose={() => setResultsLaw(null)}
                 />
             )}

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, CheckCircle, Share2, Copy, Camera, Download, ArrowLeft } from 'lucide-react'
+import { X, CheckCircle, Share2, Copy, Camera, Download, ArrowLeft, BookOpen, ChevronDown } from 'lucide-react'
 import { toPng } from 'html-to-image'
 import { supabase } from '../../supabaseClient'
+import LawFiche from '../proposals/LawFiche'
+import type { LoiFiche } from '../../types'
 
 interface AssembleeData {
   pour: number
@@ -198,12 +200,14 @@ export default function ResultsModal({
   targetType = 'proposal',
   title,
   alreadyVoted = false,
+  fiche,
 }: {
   proposalId: string
   onClose: () => void
   targetType?: 'law' | 'proposal'
   title?: string
   alreadyVoted?: boolean
+  fiche?: LoiFiche
 }) {
   const [votes, setVotes] = useState({ pour: 0, contre: 0, blanc: 0 })
   const [assemblee, setAssemblee] = useState<AssembleeData | null>(null)
@@ -571,6 +575,22 @@ export default function ResultsModal({
                         {aTotal.toLocaleString('fr-FR')} député{aTotal !== 1 ? 's' : ''} ont voté
                       </p>
                     </div>
+                  )}
+
+                  {/* Fiche « vulgarisation » : reste lisible après le vote (repliée par défaut) */}
+                  {fiche && (
+                    <details className="group border border-slate-200 rounded-2xl overflow-hidden">
+                      <summary className="min-h-[44px] px-4 py-3 flex items-center justify-between gap-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden hover:bg-slate-50 transition-colors">
+                        <span className="flex items-center gap-2 text-sm font-semibold text-[#002395]">
+                          <BookOpen size={15} />
+                          Relire la fiche de la loi
+                        </span>
+                        <ChevronDown size={16} className="text-slate-400 transition-transform group-open:rotate-180" />
+                      </summary>
+                      <div className="border-t border-slate-100">
+                        <LawFiche fiche={fiche} />
+                      </div>
+                    </details>
                   )}
 
                   {/* ── Aperçu de la carte partageable ── */}
