@@ -47,25 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             showToast("Impossible de rattacher la commune. Veuillez réessayer depuis votre profil.", 'warning')
                         }
                     }
-                    const pendingProfile = localStorage.getItem('pending_profile')
-                    if (pendingProfile) {
-                        try {
-                            const { code_postal, date_naissance_hash } = JSON.parse(pendingProfile) as {
-                                code_postal: string
-                                date_naissance_hash: string
-                            }
-                            const { error } = await supabase.from('profiles').upsert({
-                                id: session.user.id,
-                                code_postal,
-                                date_naissance_hash,
-                                verification_status: 'unverified',
-                            }, { onConflict: 'id' })
-                            if (error) throw error
-                            localStorage.removeItem('pending_profile')
-                        } catch (e) {
-                            console.error("Erreur de sauvegarde profil:", e)
-                        }
-                    }
+                    // L'inscription ne demande plus ni code postal ni date de naissance (08/11/2026).
+                    // On efface les données d'inscription d'une ancienne version restées sur l'appareil, sans les envoyer.
+                    localStorage.removeItem('pending_profile')
                 }
             }
             if (event === 'SIGNED_OUT') {
