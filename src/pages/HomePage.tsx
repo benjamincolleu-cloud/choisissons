@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabaseClient'
 import { fetchDossiersLegislatifs } from '../lib/assemblee'
@@ -6,7 +6,7 @@ import { Landmark, X } from 'lucide-react'
 
 import type { Proposal, VoteChoice, Stage, ParliamentaryLaw, ProposalRow, LoiFiche } from '../types'
 import { PROPOSALS, PARLIAMENTARY_LAWS_INITIAL } from '../lib/constants'
-import { mapRowToProposal, parseFrDate, isCitizenVoteClosedFn, derniereActiviteMs, lawToProposal } from '../lib/utils'
+import { mapRowToProposal, parseFrDate, isCitizenVoteClosedFn, derniereActiviteMs, lawToProposal, lireLoiDansLien } from '../lib/utils'
 import { showToast } from '../lib/toast'
 import { loadPendingVotes, savePendingVotes, LOGIN_TO_VOTE_MESSAGE } from '../lib/votes'
 import { generateVoteProof } from '../lib/identity'
@@ -23,9 +23,20 @@ interface HomePageProps {
     initialCategory?: string
     onNavigateSupport?: () => void
     onNavigateLibrary?: () => void
+    // Visiteur sans compte arrivé par un lien direct vers une loi (?loi=...)
+    isVisitor?: boolean
+    onRequestLogin?: () => void
 }
 
-export default function HomePage({ initialCategory, onNavigateSupport, onNavigateLibrary }: HomePageProps) {
+function correspondALaLoi(law: ParliamentaryLaw, cle: string): boolean {
+    return law.dossier?.uid === cle
+        || law.fiche?.dossierUid === cle
+        || law.number === cle
+        || law.number === `DOSSIER-${cle}`
+        || law.id === cle
+}
+
+export default function HomePage({ initialCategory, onNavigateSupport, onNavigateLibrary, isVisitor, onRequestLogin }: HomePageProps) {
     const { userHash } = useAuth()
     const [activeTab, setActiveTab] = useState<'lois' | 'propositions'>(
         initialCategory ? 'propositions' : 'lois'
@@ -77,6 +88,25 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         })
         return () => { cancelled = true }
     }, [])
+
+    // Lien direct : ouvre la fiche de la loi demandée dès que les lois sont chargées (une seule fois)
+    const lienDirectTraite = useRef(false)
+    useEffect(() => {
+        if (lienDirectTraite.current) return
+        const cle = lireLoiDansLien()
+        if (!cle) { lienDirectTraite.current = true; return }
+        const law = laws.find(l => correspondALaLoi(l, cle))
+        if (!law) return // les lois réelles ne sont peut-être pas encore chargées
+        lienDirectTraite.current = true
+        setActiveTab('lois')
+        if (law.stage === 'upcoming') setLawTab('upcoming')
+        else setLawTab(isCitizenVoteClosedFn(law) ? 'resultats' : 'voter')
+        if (lawVotedIds.has(law.id) && !isCitizenVoteClosedFn(law)) {
+            setResultsLaw({ id: law.id, title: law.title, fiche: law.fiche })
+        } else {
+            setAgoraLaw(lawToProposal(law))
+        }
+    }, [laws, lawVotedIds])
 
     useEffect(() => {
         let cancelled = false
@@ -288,7 +318,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
     const filters: { value: Stage | 'all'; label: string }[] = [
         { value: 'all', label: 'Toutes' },
         { value: 'seedling', label: 'Pépinière' },
-        { value: 'review', label: 'Jury' },
+        { value: 'review', label: 'En vérification' },
         { value: 'voting', label: 'Vote' },
         { value: 'adopted', label: 'Adoptées' },
     ]
@@ -301,6 +331,25 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                     <h1 className="text-2xl font-black text-slate-800">Démocratie</h1>
                     <p className="text-slate-500 text-sm">Citoyenne, citoyen — votre voix compte.</p>
                 </div>
+
+                {/* Visiteur sans compte (arrivé par un lien direct) */}
+                {isVisitor && (
+                    <div className="mb-4 bg-white border border-[#002395]/20 rounded-2xl p-4 shadow-sm">
+                        <p className="text-sm font-bold text-slate-800 mb-1">Vous visitez CHOISISSONS sans compte</p>
+                        <p className="text-xs text-slate-500 leading-relaxed mb-3">
+                            Lisez les fiches librement. Pour que votre vote compte, il faut un compte (gratuit, avec un email confirmé) :
+                            un compte = un vote. Si vous votez maintenant, votre choix est gardé sur cet appareil et envoyé dès votre connexion.
+                        </p>
+                        {onRequestLogin && (
+                            <button
+                                onClick={onRequestLogin}
+                                className="w-full py-2.5 rounded-xl font-semibold text-sm bg-[#002395] text-white"
+                            >
+                                Créer mon compte ou me connecter
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 {/* Bannière textes fondateurs */}
                 {onNavigateLibrary && (
@@ -407,7 +456,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                                     <span className="text-xl flex-shrink-0 mt-0.5">🗳️</span>
                                     <div>
                                         <p className="font-bold text-amber-800 text-sm mb-0.5">Donnez votre avis avant les députés</p>
-                                        <p className="text-amber-700 text-xs leading-relaxed">Ces textes n'ont pas encore été votés à l'Assemblée. C'est ici que votre voix pèse le plus.</p>
+                                        <p className="text-amber-700 text-xs leading-relaxed">Une séance est prévue à l'Assemblée pour ces textes. Quand le vote est ouvert, votez avant les députés, puis comparez.</p>
                                     </div>
                                 </div>
                             )}

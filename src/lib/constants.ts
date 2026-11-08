@@ -16,7 +16,7 @@ export const VOTE_CHOICE_BADGE: Record<VoteChoice, string> = {
 
 export const STAGE_CONFIG: Record<Stage, { label: string; color: string; icon: ElementType; description: string }> = {
   seedling: { label: 'Pépinière', color: 'bg-emerald-100 text-emerald-700', icon: Sprout, description: 'En cours de signatures' },
-  review: { label: 'Jury citoyen', color: 'bg-amber-100 text-amber-700', icon: Users, description: 'Examinée par le jury' },
+  review: { label: 'En vérification', color: 'bg-amber-100 text-amber-700', icon: Users, description: 'Vérifiée par l\'équipe avant le vote' },
   voting: { label: 'Vote ouvert', color: 'bg-indigo-100 text-indigo-700', icon: Vote, description: 'Votez maintenant' },
   adopted: { label: 'Adoptée', color: 'bg-green-100 text-green-700', icon: CheckCircle, description: 'Proposition adoptée' },
   rejected: { label: 'Rejetée', color: 'bg-red-100 text-red-700', icon: XCircle, description: 'Proposition rejetée' },
@@ -91,20 +91,20 @@ export const MOCK_ORGANISATIONS: Organisation[] = [
 
 export const WORKFLOW_STEPS = [
   {
-    label: 'Pépinière',
-    description: 'Proposez une idée. Elle devient publique après 10 soutiens citoyens.',
+    label: 'Lire',
+    description: 'Les principales lois en débat ont une fiche neutre : ce qui change, ce qui fait débat, les arguments pour et contre.',
   },
   {
-    label: 'Jury',
-    description: '100 citoyens tirés au sort vérifient la neutralité et la légalité du texte.',
+    label: 'Voter',
+    description: 'Pour, contre ou blanc. Un compte = un vote. Votre choix n\'est pas enregistré avec votre compte.',
   },
   {
-    label: 'Isoloir',
-    description: 'Votez Pour, Contre ou Blanc. Votre vote est anonyme et chiffré SHA-256.',
+    label: 'Comparer',
+    description: 'Après votre vote, découvrez le résultat des votants et celui des députés.',
   },
   {
-    label: 'Décision',
-    description: 'Si le quorum est atteint, la proposition devient une décision citoyenne officielle.',
+    label: 'Proposer',
+    description: 'Soumettez vos propres propositions : elles sont vérifiées par l\'équipe avant d\'être ouvertes au vote.',
   },
 ]
 

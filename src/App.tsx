@@ -8,6 +8,7 @@ import type { NavPage, Organisation, CommuneRole, ToastEntry } from './types'
 import { ADMIN_EMAILS } from './lib/constants'
 import { showToast, setToastHandler } from './lib/toast'
 import { useAuth } from './context/AuthContext'
+import { lireLoiDansLien } from './lib/utils'
 
 import LandingPage from './components/LandingPage'
 import LoginScreen from './components/auth/LoginScreen'
@@ -33,6 +34,9 @@ export default function App() {
     return localStorage.getItem('has_seen_landing') !== 'true'
   })
   const [activePage, setActivePage] = useState<NavPage>('home')
+  // Lien direct vers une loi (?loi=...) : un visiteur sans compte peut lire la fiche et voter
+  // (son vote est gardé sur l'appareil et envoyé à la connexion)
+  const [visitorLoi, setVisitorLoi] = useState<string | null>(() => lireLoiDansLien())
   const [showPropose, setShowPropose] = useState(false)
   const [pendingCategory, setPendingCategory] = useState<string | undefined>(undefined)
   const [selectedCommune, setSelectedCommune] = useState<Organisation | null>(null)
@@ -108,7 +112,9 @@ export default function App() {
     )
   }
 
-  if (!isLoggedIn && activePage !== 'library') {
+  const visiteurSurLienDirect = !isLoggedIn && activePage === 'home' && !!visitorLoi
+
+  if (!isLoggedIn && activePage !== 'library' && !visiteurSurLienDirect) {
     if (showLanding) {
       return <LandingPage onEnter={() => {
         localStorage.setItem('has_seen_landing', 'true')
@@ -257,7 +263,20 @@ export default function App() {
       {/* ── Content area ─────────────────────────────────────── */}
       <div className="md:pl-56 xl:pl-64 md:pt-14">
         <main className="pb-24 md:pb-10 md:max-w-[900px] xl:max-w-[1100px] md:mx-auto">
-          {activePage === 'home' && <HomePage initialCategory={pendingCategory} onNavigateSupport={() => setActivePage('support')} onNavigateLibrary={() => setActivePage('library')} />}
+          {activePage === 'home' && (
+            <HomePage
+              initialCategory={pendingCategory}
+              onNavigateSupport={() => setActivePage('support')}
+              onNavigateLibrary={() => setActivePage('library')}
+              isVisitor={!isLoggedIn}
+              onRequestLogin={() => {
+                // Le visiteur veut créer son compte : on affiche l'écran de connexion (sans repasser par la page d'accueil)
+                localStorage.setItem('has_seen_landing', 'true')
+                setShowLanding(false)
+                setVisitorLoi(null)
+              }}
+            />
+          )}
           {activePage === 'explore' && <ExplorePage onSelectCategory={handleSelectCategory} onNavigateCommuneRegister={() => setActivePage('commune-register')} onNavigateAssocRegister={() => setActivePage('assoc-register')} />}
           {activePage === 'reseau' && <AmbassadorPage />}
           {activePage === 'profile' && (

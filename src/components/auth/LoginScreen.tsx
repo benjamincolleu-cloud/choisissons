@@ -129,8 +129,8 @@ export default function LoginScreen() {
 
         <div className="space-y-3 mb-8">
           {[
-            { icon: Shield, text: 'Vote anonyme et vérifié cryptographiquement' },
-            { icon: Users, text: 'Jury citoyen indépendant' },
+            { icon: Shield, text: 'Vote secret : votre choix n\'est pas lié à votre compte' },
+            { icon: Users, text: 'Fiches neutres, arguments pour et contre sourcés' },
             { icon: Sprout, text: 'Propositions du peuple, pour le peuple' },
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="flex items-center gap-3 text-indigo-200 text-sm">

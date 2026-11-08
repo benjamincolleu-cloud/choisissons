@@ -15,8 +15,6 @@ export default function ProposalCard({ proposal, onOpen, currentVote, hasAlready
     const total = proposal.votes.pour + proposal.votes.contre + proposal.votes.blanc
     const progress = Math.min((proposal.signatures / proposal.targetSignatures) * 100, 100)
 
-    const jurorsValidated = ((parseInt(proposal.id, 10) || proposal.id.charCodeAt(0)) % 61) + 20
-
     return (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="p-4">
@@ -55,18 +53,9 @@ export default function ProposalCard({ proposal, onOpen, currentVote, hasAlready
                             <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                                 <Users size={11} className="text-amber-600" />
                             </div>
-                            <span className="text-xs font-semibold text-amber-700">En examen par le Jury Citoyen</span>
+                            <span className="text-xs font-semibold text-amber-700">En cours de vérification</span>
                         </div>
-                        <div className="flex justify-between text-xs text-slate-400 mb-1">
-                            <span>Jurés ayant validé : <strong className="text-amber-600">{jurorsValidated}</strong> / 100</span>
-                            <span>{jurorsValidated}%</span>
-                        </div>
-                        <div className="h-1.5 bg-amber-50 rounded-full overflow-hidden border border-amber-100">
-                            <div
-                                className="h-full bg-amber-400 rounded-full transition-all"
-                                style={{ width: `${jurorsValidated}%` }}
-                            />
-                        </div>
+                        <p className="text-xs text-slate-400">Vérifiée par l'équipe avant d'être ouverte au vote.</p>
                     </div>
                 )}
 
@@ -104,7 +93,7 @@ export default function ProposalCard({ proposal, onOpen, currentVote, hasAlready
                         className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-amber-50 text-amber-500 border border-amber-200 cursor-not-allowed"
                     >
                         <Users size={15} />
-                        Vote disponible après validation du Jury
+                        Vote ouvert après vérification par l'équipe
                     </button>
                 ) : proposal.stage === 'voting' && (currentVote || hasAlreadyVoted) ? (
                     <div className="space-y-2">
