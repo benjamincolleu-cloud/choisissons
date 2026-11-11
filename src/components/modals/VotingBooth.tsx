@@ -4,10 +4,12 @@ import { Lock, ArrowLeft, CheckCircle, ThumbsUp, ThumbsDown, Minus } from 'lucid
 import type { Proposal, VoteChoice } from '../../types'
 import { generateVoteProof } from '../../lib/identity'
 
-export default function VotingBooth({ proposal, onVoted, onClose }: {
+export default function VotingBooth({ proposal, onVoted, onClose, visiteur = false }: {
   proposal: Proposal
   onVoted: (choice: VoteChoice, hash: string) => void
   onClose: () => void
+  // Visiteur sans compte : son vote n'est pas encore enregistré, il doit d'abord le confirmer par email
+  visiteur?: boolean
 }) {
   const [selected, setSelected] = useState<VoteChoice | null>(null)
   const [confirming, setConfirming] = useState(false)
@@ -22,7 +24,8 @@ export default function VotingBooth({ proposal, onVoted, onClose }: {
     setHash(voteHash)
     setVoted(true)
     setLoading(false)
-    setTimeout(() => onVoted(selected, voteHash), 2500)
+    // Visiteur : il passe à la confirmation par email en cliquant (rien n'est encore enregistré)
+    if (!visiteur) setTimeout(() => onVoted(selected, voteHash), 2500)
   }
 
   const voteOptions: {
@@ -37,6 +40,30 @@ export default function VotingBooth({ proposal, onVoted, onClose }: {
     { choice: 'contre', label: 'Contre', icon: <ThumbsDown size={28} />, selectedColor: 'text-red-500', selectedBg: 'bg-red-50', selectedBorder: 'border-red-400' },
     { choice: 'blanc', label: 'Blanc', icon: <Minus size={28} />, selectedColor: 'text-slate-500', selectedBg: 'bg-slate-50', selectedBorder: 'border-slate-400' },
   ]
+
+  if (voted && visiteur && selected) {
+    const libelle = selected === 'pour' ? 'Pour' : selected === 'contre' ? 'Contre' : 'Blanc'
+    return (
+      <div className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-8">
+        <div className="w-20 h-20 rounded-full bg-indigo-100 flex items-center justify-center mb-6">
+          <Lock size={36} className="text-indigo-600" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-800 mb-2 text-center">Encore une étape</h2>
+        <p className="text-slate-600 text-sm text-center mb-1">
+          Votre choix « <strong>{libelle}</strong> » est prêt, mais <strong>il n'est pas encore compté</strong>.
+        </p>
+        <p className="text-slate-500 text-sm text-center mb-6">
+          Pour qu'il compte, confirmez-le avec votre email : vous recevrez un code à 6 chiffres. Un compte = un vote.
+        </p>
+        <button
+          onClick={() => onVoted(selected, hash)}
+          className="w-full max-w-sm py-4 rounded-xl bg-indigo-600 text-white font-semibold shadow-lg"
+        >
+          Confirmer mon vote avec mon email
+        </button>
+      </div>
+    )
+  }
 
   if (voted) {
     return (

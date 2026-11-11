@@ -50,7 +50,9 @@ export interface ProposalRow {
 export interface ToastEntry { id: number; message: string; type: 'error' | 'warning' | 'info' }
 
 // ── Pending votes ──────────────────────────────────────────────
-export interface PendingVote { proposalId: string; userHash: string; choice: string; timestamp?: number }
+export interface PendingVote { proposalId: string; userHash: string; choice: string; timestamp?: number; title?: string; lawId?: string }
+// Vote d'un visiteur envoyé à sa connexion : sert à lui confirmer son vote et à rouvrir la bonne loi (08/11/2026)
+export interface VoteConfirme { proposalId: string; lawId?: string; title?: string; choice: string; statut: 'enregistre' | 'deja_vote' }
 
 // ── Parliamentary Laws data ────────────────────────────────────
 export type EtatEtape = 'fait' | 'en_cours' | 'en_attente' | 'echec' | 'a_venir'

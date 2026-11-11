@@ -4,6 +4,7 @@ import { toPng } from 'html-to-image'
 import { supabase } from '../../supabaseClient'
 import LawFiche from '../proposals/LawFiche'
 import type { LoiFiche } from '../../types'
+import { MIN_VOTES_FOR_PCT } from '../../lib/constants'
 
 interface AssembleeData {
   pour: number
@@ -201,6 +202,8 @@ export default function ResultsModal({
   title,
   alreadyVoted = false,
   fiche,
+  choixConfirme,
+  lienLoi,
 }: {
   proposalId: string
   onClose: () => void
@@ -208,6 +211,11 @@ export default function ResultsModal({
   title?: string
   alreadyVoted?: boolean
   fiche?: LoiFiche
+  // « Pour », « Contre » ou « Blanc » : affiché juste après le vote, puis jamais plus
+  // (le choix n'est pas enregistré avec le compte)
+  choixConfirme?: string
+  // Identifiant du dossier : le bouton « Lien » partage alors le lien direct vers la loi
+  lienLoi?: string
 }) {
   const [votes, setVotes] = useState({ pour: 0, contre: 0, blanc: 0 })
   const [assemblee, setAssemblee] = useState<AssembleeData | null>(null)
@@ -295,7 +303,7 @@ export default function ResultsModal({
 
   // ── Partage lien ──────────────────────────────────────────────
   async function handleShare() {
-    const url = window.location.origin
+    const url = lienLoi ? `${window.location.origin}/?loi=${encodeURIComponent(lienLoi)}` : window.location.origin
     const text = title
       ? `J'ai voté sur « ${title} ». Et toi, tu en penses quoi ?`
       : 'Je participe à CHOISISSONS — la démocratie citoyenne.'
@@ -389,7 +397,9 @@ export default function ResultsModal({
   const total = votes.pour + votes.contre + votes.blanc
   const pourPct = total > 0 ? Math.round((votes.pour / total) * 100) : 0
   const contrePct = total > 0 ? Math.round((votes.contre / total) * 100) : 0
-  const blancPct = 100 - pourPct - contrePct
+  const blancPct = total > 0 ? 100 - pourPct - contrePct : 0
+  // Secret du vote : comme sur les cartes, le détail n'apparaît qu'à partir de MIN_VOTES_FOR_PCT votes
+  const assezDeVotes = total >= MIN_VOTES_FOR_PCT
 
   const citizenBars = [
     { label: 'Pour', pct: pourPct, color: 'bg-green-500', textColor: 'text-green-600', count: votes.pour },
@@ -424,7 +434,7 @@ export default function ResultsModal({
             </div>
             <div>
               <p className="text-sm font-bold text-slate-800">
-                {alreadyVoted ? 'Vote déjà enregistré' : 'Votre vote a été enregistré'}
+                {alreadyVoted ? 'Vote déjà enregistré' : choixConfirme ? `Votre vote « ${choixConfirme} » est enregistré` : 'Votre vote a été enregistré'}
               </p>
               <p className="text-xs text-slate-400">Résultats en temps réel</p>
             </div>
@@ -433,6 +443,16 @@ export default function ResultsModal({
             <X size={16} className="text-slate-500" />
           </button>
         </div>
+
+        {/* Rappel du secret du vote, juste après le vote */}
+        {choixConfirme && !alreadyVoted && (
+          <div className="px-5 py-3 bg-green-50 border-b border-green-100 flex-shrink-0">
+            <p className="text-xs text-green-800 leading-relaxed">
+              Votre choix n'est pas enregistré avec votre compte : c'est la seule fois où il vous est rappelé.
+              Votre compte garde seulement que vous avez voté sur cette loi.
+            </p>
+          </div>
+        )}
 
         {/* Bannière déjà voté */}
         {alreadyVoted && (
@@ -508,6 +528,14 @@ export default function ResultsModal({
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
                       {targetType === 'law' ? '👥 Avis citoyens CHOISISSONS' : '👥 Résultats citoyens'}
                     </p>
+                    {!assezDeVotes ? (
+                      <div className="bg-slate-50 rounded-xl p-4 text-center">
+                        <p className="text-sm text-slate-600">
+                          Pour protéger le secret du vote, le détail Pour / Contre / Blanc s'affiche à partir de {MIN_VOTES_FOR_PCT} votes.
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">Partagez la loi pour que d'autres citoyens votent.</p>
+                      </div>
+                    ) : (
                     <div className="space-y-3">
                       {citizenBars.map(({ label, pct, color, textColor, count }) => (
                         <div key={label}>
@@ -527,6 +555,7 @@ export default function ResultsModal({
                         </div>
                       ))}
                     </div>
+                    )}
                     <div className="pt-3 mt-1 border-t border-slate-100 text-center">
                       <p className="text-sm text-slate-500">
                         <span className="font-bold text-slate-700">{total.toLocaleString('fr-FR')}</span>{' '}
@@ -593,7 +622,8 @@ export default function ResultsModal({
                     </details>
                   )}
 
-                  {/* ── Aperçu de la carte partageable ── */}
+                  {/* ── Aperçu de la carte partageable (seulement avec assez de votes) ── */}
+                  {assezDeVotes && (
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                       Aperçu de la carte
@@ -633,6 +663,7 @@ export default function ResultsModal({
                       </div>
                     </div>
                   </div>
+                  )}
                 </>
               )}
             </div>
@@ -651,6 +682,7 @@ export default function ResultsModal({
                 : <><Share2 size={15} />Lien</>
               }
             </button>
+            {assezDeVotes && (
             <button
               onClick={handleShareImage}
               disabled={loading || sharingImage}
@@ -661,6 +693,7 @@ export default function ResultsModal({
                 : <><Camera size={15} />Image</>
               }
             </button>
+            )}
           </div>
           <button
             onClick={onClose}
