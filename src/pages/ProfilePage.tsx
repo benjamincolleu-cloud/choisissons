@@ -547,7 +547,8 @@ export default function ProfilePage({ onLogout, onNavigateElu, onNavigateOrg, on
             )}
 
             <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
-                <h3 className="font-bold text-slate-800 text-sm mb-3">Mes votes ({votedProposals.length})</h3>
+                <h3 className="font-bold text-slate-800 text-sm mb-1">Mes votes ({votedProposals.length})</h3>
+                <p className="text-xs text-slate-400 mb-3">Secret du vote : seules les lois sur lesquelles vous avez voté apparaissent ici, jamais votre choix.</p>
                 {loadingVotes ? (
                     <div className="space-y-2">
                         {[1, 2].map(i => <div key={i} className="h-12 bg-slate-50 rounded-xl animate-pulse" />)}

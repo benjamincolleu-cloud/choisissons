@@ -3,6 +3,7 @@ import { Shield, Users, Sprout, CheckCircle, ChevronRight, BookOpen, Lock } from
 import { supabase } from '../../supabaseClient'
 import { showToast } from '../../lib/toast'
 import { WORKFLOW_STEPS } from '../../lib/constants'
+import { loadPendingVotes, LIBELLE_CHOIX } from '../../lib/votes'
 
 function AboutModal({ onClose }: { onClose: () => void }) {
   return (
@@ -57,6 +58,8 @@ export default function LoginScreen() {
   const [verifying, setVerifying] = useState(false)
   const [activeStep, setActiveStep] = useState<number | null>(null)
   const [showAbout, setShowAbout] = useState(false)
+  // Vote d'un visiteur en attente : on lui rappelle son choix et ce qu'il reste à faire
+  const [voteEnAttente] = useState(() => loadPendingVotes()[0] ?? null)
 
   // Inscription minimale (08/11/2026) : seulement l'email et une déclaration sur l'honneur.
   // Le code postal et la date de naissance ne servaient à rien d'autre : ils ne sont plus demandés.
@@ -123,6 +126,19 @@ export default function LoginScreen() {
             </div>
           ))}
         </div>
+
+        {voteEnAttente && (
+          <div className="bg-white rounded-2xl p-4 mb-4 shadow-xl">
+            <p className="text-sm font-bold text-slate-800 mb-1">
+              🗳️ Votre vote « {LIBELLE_CHOIX[voteEnAttente.choice] ?? voteEnAttente.choice} »{voteEnAttente.title ? <> sur « {voteEnAttente.title} »</> : null} est prêt
+            </p>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              {sent
+                ? 'Dernière étape : entrez le code à 6 chiffres reçu par email. Votre vote sera alors compté.'
+                : 'Dernière étape pour qu\'il compte : entrez votre email, cochez la case, puis le code à 6 chiffres que vous recevrez. Un compte = un vote.'}
+            </p>
+          </div>
+        )}
 
         {sent ? (
           <div className="bg-white/10 rounded-2xl p-5 border border-white/20">

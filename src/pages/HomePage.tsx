@@ -8,7 +8,7 @@ import type { Proposal, VoteChoice, Stage, ParliamentaryLaw, ProposalRow, LoiFic
 import { PROPOSALS, PARLIAMENTARY_LAWS_INITIAL } from '../lib/constants'
 import { mapRowToProposal, parseFrDate, isCitizenVoteClosedFn, derniereActiviteMs, lawToProposal, lireLoiDansLien } from '../lib/utils'
 import { showToast } from '../lib/toast'
-import { loadPendingVotes, savePendingVotes, LOGIN_TO_VOTE_MESSAGE } from '../lib/votes'
+import { loadPendingVotes, savePendingVotes, LOGIN_TO_VOTE_MESSAGE, LIBELLE_CHOIX, VOTES_CONFIRMES_EVENT, lireVotesConfirmes, effacerVotesConfirmes } from '../lib/votes'
 import { generateVoteProof } from '../lib/identity'
 
 import ProposalCard from '../components/proposals/ProposalCard'
@@ -52,7 +52,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
     const [resultsProposalId, setResultsProposalId] = useState<string | null>(null)
     const [resultsProposalTitle, setResultsProposalTitle] = useState<string>('')
     const [resultsAlreadyVoted, setResultsAlreadyVoted] = useState(false)
-    const [resultsLaw, setResultsLaw] = useState<{ id: string; title: string; alreadyVoted?: boolean; fiche?: LoiFiche } | null>(null)
+    const [resultsLaw, setResultsLaw] = useState<{ id: string; title: string; alreadyVoted?: boolean; fiche?: LoiFiche; choix?: string } | null>(null)
 
     const previewResults = useMemo(
         () => new URLSearchParams(window.location.search).has('preview_results'),
@@ -87,6 +87,39 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
             }
         })
         return () => { cancelled = true }
+    }, [])
+
+    // Vote d'un visiteur confirmé à sa connexion : on recharge les compteurs, on rouvre la loi
+    // et on affiche « Votre vote … est enregistré ». Sans loi retrouvée : simple message.
+    useEffect(() => {
+        const afficherVotesConfirmes = () => {
+            const confirmes = lireVotesConfirmes()
+            if (confirmes.length === 0) return
+            effacerVotesConfirmes()
+            fetchDossiersLegislatifs().then(anLaws => {
+                const liste = (anLaws.length > 0 ? anLaws : []) as ParliamentaryLaw[]
+                if (liste.length > 0) setLaws(liste)
+                const premier = confirmes[0]
+                const law = liste.find(l => l.id === premier.lawId || l.number === premier.proposalId)
+                if (law) {
+                    setLawVotedIds(prev => new Set([...prev, law.id]))
+                    setActiveTab('lois')
+                    setLawTab(law.stage === 'upcoming' ? 'upcoming' : (isCitizenVoteClosedFn(law) ? 'resultats' : 'voter'))
+                    setResultsLaw({
+                        id: law.id, title: law.title, fiche: law.fiche,
+                        alreadyVoted: premier.statut === 'deja_vote',
+                        choix: premier.statut === 'enregistre' ? LIBELLE_CHOIX[premier.choice] : undefined,
+                    })
+                } else {
+                    showToast(premier.statut === 'enregistre'
+                        ? `Votre vote « ${LIBELLE_CHOIX[premier.choice] ?? ''} »${premier.title ? ` sur « ${premier.title} »` : ''} est enregistré.`
+                        : 'Vous aviez déjà voté sur ce sujet : votre premier vote est conservé.', 'info')
+                }
+            })
+        }
+        afficherVotesConfirmes()
+        window.addEventListener(VOTES_CONFIRMES_EVENT, afficherVotesConfirmes)
+        return () => window.removeEventListener(VOTES_CONFIRMES_EVENT, afficherVotesConfirmes)
     }, [])
 
     // Lien direct : ouvre la fiche de la loi demandée dès que les lois sont chargées (une seule fois)
@@ -194,12 +227,14 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         const deferUntilLogin = () => {
             const pending = loadPendingVotes()
             if (!pending.some(v => v.proposalId === proposalId)) {
-                savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now() }])
+                savePendingVotes([...pending, { proposalId, userHash, choice: mappedChoice, timestamp: Date.now(), title: proposalTitle }])
             }
             setProposals(prev =>
                 prev.map(p => p.id !== proposalId ? p : { ...p, votes: { ...p.votes, [choice]: Math.max(0, p.votes[choice] - 1) } })
             )
-            showToast(LOGIN_TO_VOTE_MESSAGE, 'info')
+            // Visiteur : direction la confirmation par email, qui lui rappelle son choix
+            if (isVisitor && onRequestLogin) onRequestLogin()
+            else showToast(LOGIN_TO_VOTE_MESSAGE, 'info')
         }
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) { deferUntilLogin(); return }
@@ -232,7 +267,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
             }
             showToast('Réseau faible. Vote sauvegardé et synchronisé à la prochaine connexion.', 'warning')
         }
-    }, [userHash])
+    }, [userHash, isVisitor, onRequestLogin])
 
     const handleLawVoted = useCallback(async (lawId: string, choice: VoteChoice) => {
         const targetLaw = laws.find(l => l.id === lawId)
@@ -265,7 +300,10 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
         const deferUntilLogin = () => {
             const pending = loadPendingVotes()
             if (!pending.some(v => v.proposalId === String(anId))) {
-                savePendingVotes([...pending, { proposalId: String(anId), userHash, choice: mappedChoice, timestamp: Date.now() }])
+                savePendingVotes([...pending, {
+                    proposalId: String(anId), userHash, choice: mappedChoice, timestamp: Date.now(),
+                    title: targetLaw?.fiche?.titreCourt || targetLaw?.title, lawId,
+                }])
             }
             setLaws(prev =>
                 prev.map(l =>
@@ -274,7 +312,10 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                         : l
                 )
             )
-            showToast(LOGIN_TO_VOTE_MESSAGE, 'info')
+            // Visiteur : on l'emmène tout de suite à l'écran de confirmation (email + code),
+            // qui lui rappelle son choix. Sinon, simple message.
+            if (isVisitor && onRequestLogin) onRequestLogin()
+            else showToast(LOGIN_TO_VOTE_MESSAGE, 'info')
         }
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) { deferUntilLogin(); return }
@@ -308,12 +349,12 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                     )
                 )
             }
-            setResultsLaw({ id: lawId, title: targetLaw?.title ?? '', alreadyVoted: result.already_voted ?? false, fiche: targetLaw?.fiche })
+            setResultsLaw({ id: lawId, title: targetLaw?.title ?? '', alreadyVoted: result.already_voted ?? false, fiche: targetLaw?.fiche, choix: result.already_voted ? undefined : LIBELLE_CHOIX[mappedChoice] })
 
         } catch {
             showToast('Erreur de connexion. Vote sauvegardé localement.', 'warning')
         }
-    }, [userHash, laws])
+    }, [userHash, laws, isVisitor, onRequestLogin])
 
     const filters: { value: Stage | 'all'; label: string }[] = [
         { value: 'all', label: 'Toutes' },
@@ -576,6 +617,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                     proposal={votingProposal}
                     onVoted={(choice) => handleVoted(votingProposal.id, choice, votingProposal.title)}
                     onClose={() => setVotingProposal(null)}
+                    visiteur={isVisitor}
                 />
             )}
 
@@ -595,6 +637,7 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                     proposal={votingLaw}
                     onVoted={(choice, hash) => { void hash; handleLawVoted(votingLaw.id, choice) }}
                     onClose={() => setVotingLaw(null)}
+                    visiteur={isVisitor}
                 />
             )}
 
@@ -610,9 +653,11 @@ export default function HomePage({ initialCategory, onNavigateSupport, onNavigat
                 <ResultsModal
                     proposalId={resultsLaw.id}
                     targetType="law"
-                    title={resultsLaw.title}
+                    title={resultsLaw.fiche?.titreCourt || resultsLaw.title}
                     alreadyVoted={resultsLaw.alreadyVoted}
                     fiche={resultsLaw.fiche}
+                    choixConfirme={resultsLaw.choix}
+                    lienLoi={laws.find(l => l.id === resultsLaw.id)?.dossier?.uid}
                     onClose={() => setResultsLaw(null)}
                 />
             )}
