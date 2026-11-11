@@ -69,7 +69,12 @@ export default function LawCard({ law, onOpen, onShowResult, forceClose, hasVote
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="p-4">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    {law.stage === 'upcoming' ? (
+                    {law.stage === 'upcoming' && !isCitizenVoteClosed ? (
+                        // Séance prévue, mais le vote citoyen est déjà ouvert : on le dit clairement
+                        <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5 flex items-center gap-1">
+                            <Vote size={12} /> Vote ouvert{voteDate ? ` · séance le ${voteDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}` : ''}
+                        </span>
+                    ) : law.stage === 'upcoming' ? (
                         <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2.5 py-0.5 flex items-center gap-1">
                             <Calendar size={12} /> À venir
                         </span>

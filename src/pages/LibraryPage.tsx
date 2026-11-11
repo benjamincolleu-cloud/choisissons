@@ -257,7 +257,7 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
       const json = await res.json() as { status?: string; message?: string; reason?: string }
 
       if (json.status === 'submitted') {
-        showToast(json.message ?? 'Proposition soumise — elle sera examinée par le jury.', 'info')
+        showToast(json.message ?? 'Proposition soumise — elle sera vérifiée avant d\'être mise au vote.', 'info')
         setShowForm(false)
         setFormText('')
         setFormMotivation('')
@@ -367,7 +367,7 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
 
   function statusLabel(status: string) {
     const map: Record<string, { label: string; cls: string }> = {
-      seedling: { label: 'En attente de jury', cls: 'bg-slate-100 text-slate-500' },
+      seedling: { label: 'En attente de vérification', cls: 'bg-slate-100 text-slate-500' },
       review: { label: 'En examen', cls: 'bg-amber-100 text-amber-700' },
       voting: { label: 'Vote ouvert', cls: 'bg-indigo-100 text-indigo-600' },
       adopted: { label: 'Adoptée', cls: 'bg-green-100 text-green-700' },
@@ -401,7 +401,7 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
         <div className="px-4">
           <p className="text-sm text-slate-500 leading-relaxed mb-4">
             Proposez des révisions citoyennes aux textes qui fondent la République française.
-            Chaque proposition est soumise au jury avant d'être mise au vote.
+            Chaque proposition est vérifiée par l'équipe avant d'être mise au vote.
           </p>
           {docs.length === 0 ? (
             <div className="text-center py-14">
@@ -695,10 +695,10 @@ export default function LibraryPage({ onNavigateSupport }: { onNavigateSupport?:
                       disabled={formSubmitting || formText.trim().length < 100 || formMotivation.trim().length < 50}
                       className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm disabled:opacity-40 transition-all active:scale-95"
                     >
-                      {formSubmitting ? 'Soumission…' : 'Soumettre au jury'}
+                      {formSubmitting ? 'Soumission…' : 'Soumettre la proposition'}
                     </button>
                     <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-                      La proposition sera examinée par le jury citoyen avant d'être mise au vote.
+                      Une IA écarte d'abord les contenus haineux, violents ou publicitaires, puis l'équipe vérifie la proposition avant de l'ouvrir au vote.
                     </p>
                   </div>
                 </div>

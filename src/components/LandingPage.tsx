@@ -62,7 +62,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                         onClick={onEnter}
                         className="bg-indigo-600 text-white font-semibold px-8 py-3.5 rounded-2xl hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-200"
                     >
-                        Je rejoins le mouvement
+                        Découvrir les lois en débat
                     </button>
                     <a
                         href="#comment"
@@ -75,8 +75,8 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                 {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl">
                     <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-                        <div className="text-2xl font-black text-indigo-600">100%</div>
-                        <div className="text-xs text-slate-400 mt-0.5">Vote anonyme</div>
+                        <div className="text-2xl font-black text-indigo-600">1</div>
+                        <div className="text-xs text-slate-400 mt-0.5">Vote par compte</div>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
                         <div className="text-2xl font-black text-slate-900">0€</div>
@@ -104,7 +104,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                             </h2>
                             <p className="text-blue-200 font-light leading-relaxed mb-8">
                                 Chaque nuit, CHOISISSONS synchronise automatiquement les projets de lois en cours au Parlement.
-                                Lisez le texte officiel, formez votre opinion, et exprimez votre voix — en parallèle du vote des députés.
+                                Lisez une fiche neutre et le texte officiel, formez votre opinion, votez — puis comparez avec le vote des députés.
                             </p>
                             <div className="space-y-3">
                                 <div className="flex items-start gap-3">
@@ -129,54 +129,40 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
-                                    <p className="text-blue-100 text-sm">Résultats agrégés publics et accessibles à tous</p>
+                                    <p className="text-blue-100 text-sm">Le vote des députés s'affiche après le vôtre, pour ne pas vous influencer</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Carte mockup loi */}
+                        {/* Carte d'exemple : montre le fonctionnement réel, sans aucun chiffre inventé */}
                         <div className="flex-1 max-w-sm w-full">
                             <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
                                 <div className="p-4 border-b border-slate-100">
                                     <div className="flex items-center gap-2 mb-3">
-                                        <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5">Assemblée Nationale</span>
-                                        <span className="text-xs text-slate-400">PLF 2026</span>
+                                        <span className="text-xs font-bold text-white bg-[#002395] rounded-full px-2.5 py-0.5">Assemblée nationale</span>
+                                        <span className="text-xs font-semibold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">Exemple</span>
                                     </div>
-                                    <h3 className="font-black text-slate-800 text-sm mb-1">Projet de loi de finances 2026</h3>
-                                    <p className="text-xs text-slate-500 leading-relaxed">Budget de l'État pour 2026. Recettes fiscales, dépenses publiques et réforme de la TVA. Enveloppe : 492 milliards €.</p>
+                                    <h3 className="font-black text-slate-800 text-sm mb-1">Une loi en débat au Parlement</h3>
+                                    <p className="text-xs text-slate-500 leading-relaxed">Les principales lois ont leur fiche, rédigée avec l'aide d'une IA et relue avant publication.</p>
                                 </div>
-                                <div className="p-4">
-                                    <p className="text-xs text-slate-400 mb-3">Avis des citoyens</p>
-                                    <div className="space-y-2">
-                                        <div>
-                                            <div className="flex justify-between text-xs mb-1">
-                                                <span className="font-semibold text-emerald-600">Pour</span>
-                                                <span className="text-slate-400">42%</span>
-                                            </div>
-                                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '42%' }}></div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between text-xs mb-1">
-                                                <span className="font-semibold text-red-500">Contre</span>
-                                                <span className="text-slate-400">51%</span>
-                                            </div>
-                                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-red-400 rounded-full" style={{ width: '51%' }}></div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between text-xs mb-1">
-                                                <span className="font-semibold text-slate-400">Blanc</span>
-                                                <span className="text-slate-400">7%</span>
-                                            </div>
-                                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-slate-300 rounded-full" style={{ width: '7%' }}></div>
-                                            </div>
-                                        </div>
+                                <div className="p-4 space-y-3">
+                                    <div className="flex items-start gap-2.5">
+                                        <span className="text-base leading-none">📄</span>
+                                        <p className="text-xs text-slate-600"><span className="font-semibold text-slate-800">En clair</span> — le texte expliqué en deux phrases</p>
                                     </div>
-                                    <button onClick={onEnter} className="w-full mt-4 py-2.5 bg-[#002395] text-white text-sm font-semibold rounded-xl">
+                                    <div className="flex items-start gap-2.5">
+                                        <span className="text-base leading-none">⚖️</span>
+                                        <p className="text-xs text-slate-600"><span className="font-semibold text-slate-800">Pour et contre</span> — autant d'arguments de chaque côté, avec leurs sources</p>
+                                    </div>
+                                    <div className="flex items-start gap-2.5">
+                                        <span className="text-base leading-none">🗳️</span>
+                                        <p className="text-xs text-slate-600"><span className="font-semibold text-slate-800">Votre vote</span> — pour, contre ou blanc</p>
+                                    </div>
+                                    <div className="flex items-start gap-2.5">
+                                        <span className="text-base leading-none">🏛️</span>
+                                        <p className="text-xs text-slate-600"><span className="font-semibold text-slate-800">Les députés</span> — leur vote s'affiche après le vôtre</p>
+                                    </div>
+                                    <button onClick={onEnter} className="w-full mt-1 py-2.5 bg-[#002395] text-white text-sm font-semibold rounded-xl">
                                         Lire &amp; Voter
                                     </button>
                                 </div>
@@ -213,8 +199,8 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
             {/* COMMENT ÇA MARCHE */}
             <section id="comment" className="max-w-5xl mx-auto px-5 py-20">
                 <p className="text-xs font-semibold tracking-widest text-indigo-500 uppercase mb-3">Le fonctionnement</p>
-                <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Du brouillon au vote national</h2>
-                <p className="text-slate-500 mb-12 max-w-lg">Votre idée suit un parcours en 4 étapes, conçu pour garantir la neutralité et éviter toute manipulation.</p>
+                <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Lire, voter, comparer</h2>
+                <p className="text-slate-500 mb-12 max-w-lg">CHOISISSONS est en version bêta. Voici exactement ce qui se passe aujourd'hui.</p>
 
                 <div className="space-y-4">
                     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex gap-5 items-start step-line">
@@ -222,49 +208,46 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                         <div className="flex-1">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <h3 className="font-bold text-slate-800 mb-1">Proposez</h3>
-                                    <p className="text-sm text-slate-500">Rédigez votre idée de loi. Elle entre en Pépinière — visible uniquement par votre réseau et via recherche directe. Pas encore publique.</p>
+                                    <h3 className="font-bold text-slate-800 mb-1">Lisez</h3>
+                                    <p className="text-sm text-slate-500">Les principales lois en débat ont une fiche neutre : ce que le texte change, ce qui fait débat, et autant d'arguments pour que contre, chacun avec sa source.</p>
                                 </div>
-                                <span className="bg-slate-100 text-slate-500 text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0">🌱 Pépinière</span>
+                                <span className="bg-slate-100 text-slate-500 text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0">📄 Fiche</span>
                             </div>
                         </div>
                     </div>
-
                     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex gap-5 items-start step-line">
                         <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 relative z-10">02</div>
                         <div className="flex-1">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <h3 className="font-bold text-slate-800 mb-1">Récoltez 10 soutiens</h3>
-                                    <p className="text-sm text-slate-500">Avec 10 soutiens de citoyens vérifiés, la proposition passe automatiquement devant le jury. Elle n'est toujours pas ouverte au vote général.</p>
+                                    <h3 className="font-bold text-slate-800 mb-1">Votez</h3>
+                                    <p className="text-sm text-slate-500">Pour, contre ou blanc. Un compte = un vote, et le vote est définitif. Il reste ouvert tant que la loi est en débat au Parlement.</p>
                                 </div>
-                                <span className="bg-emerald-50 text-emerald-600 text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0">⭐ 10 soutiens</span>
+                                <span className="bg-indigo-50 text-indigo-600 text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0">🗳️ Vote</span>
                             </div>
                         </div>
                     </div>
-
                     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex gap-5 items-start step-line">
                         <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 relative z-10">03</div>
                         <div className="flex-1">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <h3 className="font-bold text-slate-800 mb-1">Le jury citoyen valide</h3>
-                                    <p className="text-sm text-slate-500">100 citoyens tirés au sort vérifient la neutralité, la légalité et la clarté du texte. Ils ne jugent pas le fond — seulement la forme. Si 51% valident, la proposition devient publique et votable.</p>
+                                    <h3 className="font-bold text-slate-800 mb-1">Comparez</h3>
+                                    <p className="text-sm text-slate-500">Après votre vote, vous découvrez le résultat des votants de CHOISISSONS et, dès qu'il est connu, celui des députés.</p>
                                 </div>
-                                <span className="bg-amber-50 text-amber-600 text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0">👥 Jury</span>
+                                <span className="bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0">🏛️ Députés</span>
                             </div>
                         </div>
                     </div>
-
                     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex gap-5 items-start">
                         <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0">04</div>
                         <div className="flex-1">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <h3 className="font-bold text-slate-800 mb-1">Vote national</h3>
-                                    <p className="text-sm text-slate-500">La proposition est ouverte à tous les Français pendant 7 à 30 jours. Le résultat est public, transparent, et appartient à tous.</p>
+                                    <h3 className="font-bold text-slate-800 mb-1">Proposez</h3>
+                                    <p className="text-sm text-slate-500">Vous pouvez aussi soumettre une proposition. Une IA écarte d'abord les contenus haineux, violents ou publicitaires, puis l'équipe la vérifie avant de l'ouvrir au vote.</p>
                                 </div>
-                                <span className="bg-indigo-50 text-indigo-600 text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0">🗳️ Vote</span>
+                                <span className="bg-emerald-50 text-emerald-600 text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0">🌱 Proposition</span>
                             </div>
                         </div>
                     </div>
@@ -281,14 +264,14 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
                         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
                             <div className="text-2xl mb-3">🔒</div>
-                            <h3 className="font-bold text-white text-sm mb-2">Anonymat réel</h3>
-                            <p className="text-slate-400 text-xs leading-relaxed">Votre vote est chiffré en SHA-256 avant envoi. Personne — même nous — ne sait comment vous avez voté.</p>
+                            <h3 className="font-bold text-white text-sm mb-2">Vote secret</h3>
+                            <p className="text-slate-400 text-xs leading-relaxed">Votre choix n'est pas enregistré avec votre compte. La base retient seulement que vous avez voté, pour empêcher le double vote ; votre bulletin est rangé à part, sans lien avec vous.</p>
                         </div>
 
                         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
                             <div className="text-2xl mb-3">📂</div>
-                            <h3 className="font-bold text-white text-sm mb-2">Données ouvertes</h3>
-                            <p className="text-slate-400 text-xs leading-relaxed">Les résultats des votes agrégés appartiennent aux citoyens. Librement accessibles à tous — journalistes, chercheurs, associations.</p>
+                            <h3 className="font-bold text-white text-sm mb-2">Résultats publics</h3>
+                            <p className="text-slate-400 text-xs leading-relaxed">Les résultats d'ensemble sont visibles par tous à la fin de chaque vote. Aucun vote individuel n'est jamais publié.</p>
                         </div>
 
                         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
@@ -310,54 +293,39 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
                             <div className="text-2xl mb-3">⚖️</div>
                             <h3 className="font-bold text-white text-sm mb-2">Neutralité politique</h3>
-                            <p className="text-slate-400 text-xs leading-relaxed">Aucun parti ni lobby ne peut monopoliser la plateforme. Le jury citoyen tiré au sort y veille à chaque étape.</p>
+                            <p className="text-slate-400 text-xs leading-relaxed">Aucun parti ni lobby ne finance la plateforme. Chaque fiche présente autant d'arguments pour que contre, et chacun peut signaler un manque de neutralité.</p>
                         </div>
 
                         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
                             <div className="text-2xl mb-3">🇫🇷</div>
-                            <h3 className="font-bold text-white text-sm mb-2">Hébergé en France</h3>
-                            <p className="text-slate-400 text-xs leading-relaxed">Serveur Supabase Paris. Vos données ne quittent pas le territoire français et sont soumises au droit européen (RGPD).</p>
+                            <h3 className="font-bold text-white text-sm mb-2">Données à Paris</h3>
+                            <p className="text-slate-400 text-xs leading-relaxed">La base de données est hébergée à Paris et soumise au droit européen (RGPD).</p>
                         </div>
 
                     </div>
                 </div>
             </section>
 
-            {/* TÉMOIGNAGES */}
+            {/* TRANSPARENCE : ce que valent nos chiffres */}
             <section className="max-w-5xl mx-auto px-5 py-20">
-                <p className="text-xs font-semibold tracking-widest text-indigo-500 uppercase mb-3">Ils ont essayé</p>
-                <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Ce que disent les premiers citoyens</h2>
-                <p className="text-slate-500 mb-12 max-w-lg">Les testeurs de la version bêta partagent leur expérience.</p>
+                <p className="text-xs font-semibold tracking-widest text-indigo-500 uppercase mb-3">Transparence</p>
+                <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Ce que valent nos chiffres</h2>
+                <p className="text-slate-500 mb-12 max-w-lg">Nous préférons vous dire nous-mêmes ce que nos résultats garantissent, et ce qu'ils ne garantissent pas.</p>
                 <div className="grid sm:grid-cols-3 gap-4">
                     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-                        <p className="text-sm text-slate-600 leading-relaxed italic mb-5">"Pour la première fois, j'ai l'impression que mon opinion compte entre deux élections. Simple, clair, et je vois exactement comment mon vote est protégé."</p>
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold flex items-center justify-center">ML</div>
-                            <div>
-                                <div className="text-sm font-semibold text-slate-800">Marie-Laure</div>
-                                <div className="text-xs text-slate-400">Lyon, institutrice</div>
-                            </div>
-                        </div>
+                        <div className="text-xl mb-3">✅</div>
+                        <h3 className="font-bold text-slate-800 mb-2">Un compte = un vote</h3>
+                        <p className="text-sm text-slate-500 leading-relaxed">Le double vote est bloqué par la base de données elle-même, et un vote ne peut pas être modifié après coup.</p>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-                        <p className="text-sm text-slate-600 leading-relaxed italic mb-5">"J'étais sceptique. Mais le jury citoyen m'a convaincu — c'est le seul mécanisme qui empêche les militants organisés de tout noyauter."</p>
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold flex items-center justify-center">JP</div>
-                            <div>
-                                <div className="text-sm font-semibold text-slate-800">Jean-Pierre</div>
-                                <div className="text-xs text-slate-400">Bordeaux, retraité</div>
-                            </div>
-                        </div>
+                        <div className="text-xl mb-3">📧</div>
+                        <h3 className="font-bold text-slate-800 mb-2">Pas encore de vérification d'identité</h3>
+                        <p className="text-sm text-slate-500 leading-relaxed">L'inscription se fait avec un email confirmé. Nos résultats sont un baromètre des votants de CHOISISSONS : ce n'est ni un sondage représentatif, ni un référendum.</p>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-                        <p className="text-sm text-slate-600 leading-relaxed italic mb-5">"Ce que j'aime : les données des votes sont publiques. Je peux les réutiliser pour mes articles. C'est ça, la vraie transparence."</p>
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold flex items-center justify-center">RC</div>
-                            <div>
-                                <div className="text-sm font-semibold text-slate-800">Romain C.</div>
-                                <div className="text-xs text-slate-400">Paris, journaliste</div>
-                            </div>
-                        </div>
+                        <div className="text-xl mb-3">🧪</div>
+                        <h3 className="font-bold text-slate-800 mb-2">Un projet en construction</h3>
+                        <p className="text-sm text-slate-500 leading-relaxed">CHOISISSONS est un projet citoyen indépendant, en version bêta. Une vérification d'identité et un jury de citoyens tirés au sort sont à l'étude, pour quand la communauté sera assez grande.</p>
                     </div>
                 </div>
             </section>
@@ -365,15 +333,15 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
             {/* CTA FINAL */}
             <section className="max-w-5xl mx-auto px-5 pb-24">
                 <div className="bg-indigo-600 rounded-3xl p-12 text-center shadow-xl shadow-indigo-200">
-                    <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Rejoignez le mouvement dès aujourd'hui</h2>
-                    <p className="text-indigo-200 mb-8 text-lg font-light">Gratuit, anonyme, sans publicité. Juste votre voix, amplifiée.</p>
+                    <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Votre avis compte aussi entre deux élections</h2>
+                    <p className="text-indigo-200 mb-8 text-lg font-light">Gratuit, sans parti, sans publicité. Vote secret.</p>
                     <button
                         onClick={onEnter}
                         className="inline-block bg-white text-indigo-600 font-black px-10 py-4 rounded-2xl hover:bg-indigo-50 transition-all active:scale-95 text-lg shadow-lg"
                     >
                         Accéder à CHOISISSONS →
                     </button>
-                    <p className="text-indigo-300 mt-5 text-sm">Aucune inscription requise pour consulter les propositions et les résultats.</p>
+                    <p className="text-indigo-300 mt-5 text-sm">Un compte gratuit (email confirmé) est nécessaire pour voter.</p>
                 </div>
             </section>
 

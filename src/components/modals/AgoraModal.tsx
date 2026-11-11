@@ -441,7 +441,7 @@ export default function AgoraModal({ proposal, onVote, onClose, hasVoted, userHa
             <div className="mb-4 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
               <span className="text-base">⏳</span>
               <div>
-                <p className="text-sm font-bold text-blue-700">En attente du jury</p>
+                <p className="text-sm font-bold text-blue-700">En attente de vérification</p>
                 <p className="text-xs text-blue-600 leading-relaxed">{submitMessage}</p>
               </div>
             </div>

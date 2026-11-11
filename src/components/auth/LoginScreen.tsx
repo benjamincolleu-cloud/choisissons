@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Shield, Users, Sprout, CheckCircle, ChevronRight, BookOpen, Lock } from 'lucide-react'
 import { supabase } from '../../supabaseClient'
-import { sha256Hex, isAtLeast18 } from '../../lib/utils'
 import { showToast } from '../../lib/toast'
 import { WORKFLOW_STEPS } from '../../lib/constants'
 
@@ -51,8 +50,6 @@ function AboutModal({ onClose }: { onClose: () => void }) {
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
-  const [codePostal, setCodePostal] = useState('')
-  const [dateNaissance, setDateNaissance] = useState('')
   const [certifie, setCertifie] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -61,32 +58,17 @@ export default function LoginScreen() {
   const [activeStep, setActiveStep] = useState<number | null>(null)
   const [showAbout, setShowAbout] = useState(false)
 
-  const formValid = email.trim() && /^\d{5}$/.test(codePostal) && dateNaissance && certifie
+  // Inscription minimale (08/11/2026) : seulement l'email et une déclaration sur l'honneur.
+  // Le code postal et la date de naissance ne servaient à rien d'autre : ils ne sont plus demandés.
+  const formValid = email.trim() && certifie
 
   const handleSendLink = async () => {
     if (!email.trim() || sending) return
-    if (!/^\d{5}$/.test(codePostal)) {
-      showToast('Le code postal doit contenir exactement 5 chiffres.')
-      return
-    }
-    if (!dateNaissance) {
-      showToast('Veuillez entrer votre date de naissance.')
-      return
-    }
-    if (!isAtLeast18(dateNaissance)) {
-      showToast('Vous devez avoir 18 ans minimum pour vous inscrire.')
-      return
-    }
     if (!certifie) {
       showToast('Vous devez cocher la case de certification.')
       return
     }
     setSending(true)
-    const dateHash = await sha256Hex(dateNaissance)
-    localStorage.setItem('pending_profile', JSON.stringify({
-      code_postal: codePostal,
-      date_naissance_hash: dateHash,
-    }))
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
@@ -129,8 +111,8 @@ export default function LoginScreen() {
 
         <div className="space-y-3 mb-8">
           {[
-            { icon: Shield, text: 'Vote anonyme et vérifié cryptographiquement' },
-            { icon: Users, text: 'Jury citoyen indépendant' },
+            { icon: Shield, text: 'Vote secret : votre choix n\'est pas lié à votre compte' },
+            { icon: Users, text: 'Fiches neutres, arguments pour et contre sourcés' },
             { icon: Sprout, text: 'Propositions du peuple, pour le peuple' },
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="flex items-center gap-3 text-indigo-200 text-sm">
@@ -193,27 +175,6 @@ export default function LoginScreen() {
               autoComplete="email"
               className="w-full bg-white/10 border border-white/20 text-white placeholder-indigo-300 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300 mb-3"
             />
-            <input
-              type="text"
-              value={codePostal}
-              onChange={e => setCodePostal(e.target.value.replace(/\D/g, '').slice(0, 5))}
-              placeholder="Code postal (ex : 75011)"
-              inputMode="numeric"
-              maxLength={5}
-              className="w-full bg-white/10 border border-white/20 text-white placeholder-indigo-300 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300 mb-3"
-            />
-            <div className="mb-3">
-              <label className="block text-indigo-200 text-xs font-medium mb-1.5">
-                Date de naissance <span className="text-indigo-400">(18 ans minimum)</span>
-              </label>
-              <input
-                type="date"
-                value={dateNaissance}
-                onChange={e => setDateNaissance(e.target.value)}
-                max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
-                className="w-full bg-white/10 border border-white/20 text-white rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300 [color-scheme:dark]"
-              />
-            </div>
             <label className="flex items-start gap-3 mb-4 cursor-pointer">
               <input
                 type="checkbox"
@@ -222,7 +183,7 @@ export default function LoginScreen() {
                 className="mt-0.5 w-4 h-4 accent-indigo-400 flex-shrink-0"
               />
               <span className="text-indigo-200 text-xs leading-relaxed">
-                Je certifie résider dans cette commune et voter en mon nom propre.
+                Je certifie avoir 18 ans ou plus et voter en mon nom propre.
               </span>
             </label>
             <button
@@ -244,7 +205,7 @@ export default function LoginScreen() {
         )}
 
         <p className="text-center text-indigo-400 text-xs mt-3">
-          Connexion sécurisée sans mot de passe · Phase 2 : FranceConnect
+          Connexion sécurisée sans mot de passe
         </p>
 
         <button

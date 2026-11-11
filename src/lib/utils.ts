@@ -62,6 +62,14 @@ export function parseFrDate(s: string): number {
   return Infinity
 }
 
+// Lien direct vers une loi : choisissons.fr/?loi=<identifiant du dossier>, ex. ?loi=DLR5L17N53069
+export function lireLoiDansLien(): string | null {
+  try {
+    const v = new URLSearchParams(window.location.search).get('loi')
+    return v && v.trim() ? v.trim() : null
+  } catch { return null }
+}
+
 // Parcours au Parlement terminé : loi promulguée, adoptée définitivement ou rejetée
 export function estLoiTerminee(law: { dossier?: LoiDossier }): boolean {
   const statut = law.dossier?.statut
